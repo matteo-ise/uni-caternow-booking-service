@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DishImage from './DishImage'
 
 const SECTIONS = [
   { key: 'vorspeise',    label: 'Vorspeise', icon: '🥗', kpi: 'Appetizer' },
@@ -103,25 +104,22 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                 </button>
               </div>
 
-              {selected?.image_url ? (
-                <div style={{ 
-                  marginTop: '12px', 
-                  width: '100%', 
-                  height: '100px', 
-                  borderRadius: '8px', 
-                  overflow: 'hidden', 
-                  border: '1px solid #eee',
-                  filter: isConfirmed ? 'none' : 'sepia(0.2) brightness(0.9)'
-                }}>
-                  <img src={selected.image_url} alt={selected.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {selected && (
+                <div style={{ marginTop: '12px', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
+                  <DishImage 
+                    src={selected.image_url} 
+                    alt={selected.name} 
+                    category={section.key.includes('hauptspeise') ? 'hauptgericht' : section.key}
+                    style={{ width: '100%', height: '100%' }}
+                  />
                 </div>
-              ) : null}
+              )}
 
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {hasOptions && !isConfirmed && (
                   <button onClick={() => handlePrev(section.key)} className="nav-btn" disabled={!isActive}>‹</button>
                 )}
-
+                
                 <div style={{ flex: 1 }}>
                   {selected ? (
                     <div style={{ textAlign: 'center' }}>
@@ -145,8 +143,14 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', padding: '10px' }}>
+                      {/* Hier prüfen wir, ob die KI gerade schreibt oder ob wir wirklich nichts gefunden haben */}
                       <div className="pulse-placeholder" style={{ height: '12px', width: '50%', background: '#e2e8f0', borderRadius: '4px', margin: '0 auto 8px' }}></div>
-                      <div style={{ color: '#cbd5e1', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.05em' }}>INAKTIV</div>
+                      <div style={{ color: '#cbd5e1', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.05em' }}>
+                        SUCHE LÄUFT...
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '4px', fontStyle: 'italic' }}>
+                        Der Kellner prüft den Bestand...
+                      </div>
                     </div>
                   )}
                 </div>
@@ -157,11 +161,11 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
               </div>
             </div>
           )
-          })}
-          </div>
+        })}
+      </div>
 
-          {step === 2 && (
-          <div style={{ padding: '20px' }}>
+      {step === 2 && (
+        <div style={{ padding: '20px' }}>
           <button
             className={`canvas__confirm-btn ${allFilled ? 'canvas__confirm-btn--active' : ''}`}
             disabled={!allFilled}
@@ -180,11 +184,11 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
           >
             Menü verbindlich anfragen
           </button>
-          </div>
-          )}
+        </div>
+      )}
 
-          <style jsx>{`
-          .nav-btn {
+      <style jsx>{`
+        .nav-btn {
           background: #f1f5f9;
           border: none;
           width: 32px;
@@ -196,13 +200,13 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
           cursor: pointer;
           font-weight: 800;
           color: #037A8B;
-          }
-          .nav-btn:disabled {
+        }
+        .nav-btn:disabled {
           opacity: 0.3;
           cursor: not-allowed;
-          }
-          .nav-btn:hover:not(:disabled) { background: #e2e8f0; }
-          `}</style>
+        }
+        .nav-btn:hover:not(:disabled) { background: #e2e8f0; }
+      `}</style>
     </div>
   )
 }

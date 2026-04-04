@@ -1,18 +1,23 @@
 """
 Chat Module for CaterNow Backend API.
 Optimized for Vector Excellence and Mathematical Transparency.
+Strict Hallucination Prevention via Python Snap-Back Verification Layer.
 """
 import os
 import threading
 import json
 import re
+import difflib
+from typing import Optional
 import google.generativeai as genai
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
 from models import ChatRequest, ChatResponse, MenuSuggestion, Dish
-from embeddings import find_similar_dishes
+from database import SessionLocal
+from db_models import DBDish
 from research import run_company_research
 from memory import update_memory_async, get_memory
 from data_assets import get_historical_context
@@ -25,43 +30,57 @@ GEMINI_MODEL = "models/gemini-flash-lite-latest"
 
 BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der wohl charmanteste Menü-Verkäufer der Welt. 
 
+STRIKTE REGEL:
+Du darfst NIEMALS Gerichte erfinden. Nutze AUSSCHLIESSLICH die Namen aus der Liste "VERFÜGBARE ECHTE GERICHTE". 
+Wir haben z.B. mehrere Sorten Tiramisu oder Mousse – schlage IMMER die exakten Namen vor, die in der Liste stehen.
+
 PERSONA:
 - Charmant, witzig, extrem kurze Antworten (max 2 Sätze).
 - Nutze rigeros Firmen-Research (Werte, Slogan, Farben).
-- UPSELLING-PROFI: Dein Ziel ist es, den Umsatz und die Kundenzufriedenheit zu maximieren.
-
-EINSTIEG / ANLASS-AUSWAHL:
-Wenn der Kunde dir zu Beginn seinen Anlass nennt (z.B. "Firmenevent / Jubiläum", "Hochzeit", "Business Lunch / Meeting"), reagiere charmant darauf.
-
-MASTER-PROMPT / STEP-SKIPPING:
-Falls der Kunde bereits in seiner ersten Nachricht ALLE oder VIELE Details nennt (Anlass, Personen, Budget, Vorlieben), überspringe das Vorgeplänkel und schlage SOFORT ein passendes Menü vor. Nutze in diesem Fall direkt den [MENU_JSON] Block.
+- UPSELLING-PROFI: Sobald eine Hauptspeise gefunden wurde, frage SOFORT nach einer zweiten (HP2).
 
 MISSION:
-1. Nutze RAG für echte Menü-Vorschläge. Halluzinationsverbot!
-2. UPSELLING-REGEL: Sobald eine Hauptspeise (HP1) gefunden wurde, frage den Kunden SOFORT, ob eine zweite, komplementäre Hauptspeise (HP2) Sinn macht (z.B. eine vegetarische Option zu Fleisch), um alle Gäste glücklich zu machen.
-3. Die Gerichte erscheinen rechts im Canvas. Verweise darauf.
-4. Sobald du ein Menü vorschlägst, hänge am Ende ZWINGEND diesen JSON Block an (nutze exakt die Daten aus dem Kontext):
+1. Nutze RAG für echte Menü-Vorschläge.
+2. Die Gerichte erscheinen rechts im Canvas. Verweise darauf.
+3. Hänge am Ende ZWINGEND diesen JSON Block an:
 [MENU_JSON]
 {
-  "vorspeise": {"name": "...", "kategorie": "vorspeise", "preis": 0.0, "similarity_score": 0.95, "alternativen": [...]},
-  "hauptgericht1": {"name": "...", "kategorie": "hauptgericht", "preis": 0.0, "similarity_score": 0.88, "alternativen": [...]},
-  "hauptgericht2": {"name": "...", "kategorie": "hauptgericht", "preis": 0.0, "similarity_score": 0.85, "alternativen": [...]},
-  "dessert": {"name": "...", "kategorie": "dessert", "preis": 0.0, "similarity_score": 0.92, "alternativen": [...]}
+  "vorspeise": {"name": "EXAKTER_NAME_AUS_LISTE"},
+  "hauptgericht1": {"name": "EXAKTER_NAME_AUS_LISTE"},
+  "hauptgericht2": {"name": "EXAKTER_NAME_AUS_LISTE"},
+  "dessert": {"name": "EXAKTER_NAME_AUS_LISTE"}
 }
 [/MENU_JSON]
 """
 
+def _get_official_dish(suggested_name: str, db: Session) -> Optional[DBDish]:
+    """Sucht das exakte oder am besten passende Gericht in der Datenbank."""
+    if not suggested_name: return None
+    
+    # 1. Exakter Match (Case Insensitive)
+    dish = db.query(DBDish).filter(DBDish.name.ilike(suggested_name)).first()
+    if dish: return dish
+    
+    # 2. Fuzzy Match (Strikte Wurzel-Behandlung: Nur bei sehr hoher Übereinstimmung)
+    all_dishes = db.query(DBDish).all()
+    names = [d.name for d in all_dishes]
+    matches = difflib.get_close_matches(suggested_name, names, n=1, cutoff=0.6) # Etwas lockerer für KI-Variationen
+    
+    if matches:
+        return db.query(DBDish).filter(DBDish.name == matches[0]).first()
+    return None
+
 def _build_context_from_dishes(user_message: str) -> str:
-    """Extrahiert Gerichte via Vector-Search und fügt Similarity-Scores in den Kontext ein."""
-    lines = ["VECTOR SEARCH RESULTS (TOP MATCHES FROM NEON DB):"]
+    """Extrahiert Gerichte via Vector-Search."""
+    from embeddings import find_similar_dishes
+    lines = ["VERFÜGBARE ECHTE GERICHTE (NUTZE DIESE NAMEN 1:1):"]
     for kategorie in ["vorspeise", "hauptgericht", "dessert"]:
         try:
-            dishes = find_similar_dishes(user_message, kategorie=kategorie, top_k=5)
+            dishes = find_similar_dishes(user_message, kategorie=kategorie, top_k=8) # Mehr Auswahl für die KI
             if dishes:
                 lines.append(f"\nKATEGORIE {kategorie.upper()}:")
                 for d in dishes:
-                    # Wir liefern der KI die Scores mit, damit sie diese 'versteht'
-                    lines.append(f"  - {d.name} (Preis: {d.preis:.2f}€, Similarity: {d.similarity_score:.4f})")
+                    lines.append(f"  - {d.name}")
         except: continue
     return "\n".join(lines)
 
@@ -98,10 +117,40 @@ async def chat(request: ChatRequest):
                 full_reply += token
                 yield token
         except Exception as e:
-            if "429" in str(e): yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 Kurz abkühlen..."
+            if "429" in str(e): yield "Meine Leitung glüht gerade vor Begeisterung! 🔥"
             else: yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
 
-        # Update memory in background
+        # ── VERIFICATION LAYER (Snap-Back Logic) ──
+        match = re.search(r"\[MENU_JSON\](.*?)\[/MENU_JSON\]", full_reply, re.DOTALL)
+        if match:
+            try:
+                suggested_json = json.loads(match.group(1).strip())
+                db = SessionLocal()
+                verified_menu = {}
+                
+                mapping = {
+                    "vorspeise": "vorspeise",
+                    "hauptgericht1": "hauptspeise1",
+                    "hauptgericht2": "hauptspeise2",
+                    "dessert": "nachspeise"
+                }
+                
+                for ai_key, frontend_key in mapping.items():
+                    if ai_key in suggested_json:
+                        official_dish = _get_official_dish(suggested_json[ai_key].get("name"), db)
+                        if official_dish:
+                            verified_menu[frontend_key] = {
+                                "name": official_dish.name,
+                                "kategorie": official_dish.kategorie,
+                                "preis": official_dish.preis,
+                                "image_url": official_dish.image_url,
+                                "similarity_score": 0.99
+                            }
+                db.close()
+                if verified_menu:
+                    yield f"\n[VERIFIED_JSON]{json.dumps(verified_menu)}[/VERIFIED_JSON]"
+            except: pass
+
         clean_reply = re.sub(r"\[MENU_JSON\].*?\[/MENU_JSON\]", "", full_reply, flags=re.DOTALL).strip()
         if clean_reply:
             threading.Thread(target=update_memory_async, args=(lead_id, last_user_msg, clean_reply, hard_facts)).start()

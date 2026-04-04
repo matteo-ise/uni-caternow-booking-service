@@ -12,7 +12,7 @@ import { API_URL } from './config'
 function Home() {
   const [chatOpen, setChatOpen] = useState(false)
   const [backendReady, setBackendReady] = useState(false)
-  const [loadingMsg, setLoadingMsg] = useState('Der Kellner legt gerade noch das Tischtuch bereit...')
+  const [loadingMsg, setLoadingMsg] = useState('CaterNow startet! Gleich geht\'s los...')
 
   // Health Check Polling für Kaltstart-Abfang
   useEffect(() => {
@@ -26,7 +26,7 @@ function Home() {
         }
       } catch (err) {
         // Render Free Tier Spin-up takes time
-        setLoadingMsg('Der Koch bereitet die Küche vor... Gleich geht\'s los!')
+        setLoadingMsg('CaterNow startet! Gleich geht\'s los...')
       }
     }
     
@@ -60,7 +60,7 @@ function Home() {
           disabled={!backendReady}
         />
       </div>
-      {chatOpen && backendReady && <ChatModal onClose={() => setChatOpen(false)} />}
+      {backendReady && <ChatModal isOpen={chatOpen} onClose={() => setChatOpen(false)} />}
     </>
   )
 }

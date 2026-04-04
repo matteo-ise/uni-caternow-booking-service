@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ProgressTimeline from './ProgressTimeline'
 import Step1Wizard      from './Step1Wizard'
 import ChatPanel        from './ChatPanel'
@@ -7,8 +8,9 @@ import Step4Final       from './Step4Final'
 import { useAuth }      from '../../context/AuthContext'
 import { API_URL }      from '../../config'
 
-export default function ChatModal({ onClose }) {
+export default function ChatModal({ isOpen, onClose }) {
   const { currentUser } = useAuth()
+  const navigate = useNavigate()
   const [step,             setStep]         = useState(1)
   const [wizardData,       setWizardData]   = useState({})
   const [messages,         setMessages]     = useState([])
@@ -57,6 +59,15 @@ export default function ChatModal({ onClose }) {
 
     setInputValue('')
     setQuickReplies([])
+
+    // Tracking für zusätzliche Leistungen in Schritt 3
+    if (step === 3 && trimmed !== 'Nein, danke' && trimmed !== 'Bestellung prüfen →') {
+      setServices(prev => {
+        if (prev.includes(trimmed)) return prev
+        return [...prev, trimmed]
+      })
+    }
+
     const userMsg = { role: 'user', content: trimmed }
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
@@ -67,7 +78,12 @@ export default function ChatModal({ onClose }) {
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversation: updatedMessages, wizardData: wizardData, leadId: leadId })
+        body: JSON.stringify({ 
+          conversation: updatedMessages, 
+          wizardData: wizardData, 
+          leadId: leadId,
+          context_services: selectedServices 
+        })
       })
       
       if (!response.ok) throw new Error("API Error")
@@ -90,10 +106,26 @@ export default function ChatModal({ onClose }) {
         })
       }
 
-      const jsonMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
-      if (jsonMatch) {
+      // Once finished, extract JSON if present
+      let cleanText = fullText
+      
+      // We check for VERIFIED_JSON first (the ground truth from our Python layer)
+      const verifiedMatch = fullText.match(/\[VERIFIED_JSON\](.*?)\[\/VERIFIED_JSON\]/s)
+      const aiMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
+      
+      if (verifiedMatch) {
         try {
-          const data = JSON.parse(jsonMatch[1].trim())
+          const verifiedData = JSON.parse(verifiedMatch[1].trim())
+          setMenu(prev => ({
+            ...prev,
+            ...verifiedData
+          }))
+          // Update options as well if possible, or just keep verified choice
+        } catch (e) { console.error("Verified JSON Error", e) }
+      } else if (aiMatch) {
+        // Fallback to AI JSON if no verification happened
+        try {
+          const data = JSON.parse(aiMatch[1].trim())
           const newOptions = {
             vorspeise: data.vorspeise?.alternativen || (data.vorspeise ? [data.vorspeise] : []),
             hauptspeise1: data.hauptgericht1?.alternativen || (data.hauptgericht1 ? [data.hauptgericht1] : []),
@@ -107,10 +139,15 @@ export default function ChatModal({ onClose }) {
             hauptspeise2: data.hauptgericht2 || null,
             nachspeise: data.dessert || null
           })
-        } catch (e) { console.error("JSON Parse Error", e) }
+        } catch (e) { console.error("AI JSON Error", e) }
       }
 
-      const cleanText = fullText.replace(/\[MENU_JSON\].*?\[\/MENU_JSON\]/gs, '').trim()
+      // Cleanup visible text from all JSON markers
+      cleanText = fullText
+        .replace(/\[VERIFIED_JSON\].*?\[\/VERIFIED_JSON\]/gs, '')
+        .replace(/\[MENU_JSON\].*?\[\/MENU_JSON\]/gs, '')
+        .trim()
+
       setMessages(prev => {
         const newMsgs = [...prev]
         newMsgs[newMsgs.length - 1] = { role: 'model', content: cleanText }
@@ -123,7 +160,7 @@ export default function ChatModal({ onClose }) {
         return newMsgs
       })
     } finally { setIsWaiting(false) }
-  }, [messages, isWaiting, wizardData, leadId])
+  }, [messages, isWaiting, wizardData, leadId, selectedServices])
 
   function handleMenuSelect(course, dish) {
     if (course === 'TRIGGER_UPSELL') {
@@ -151,7 +188,7 @@ export default function ChatModal({ onClose }) {
       const token = await currentUser.getIdToken()
       const payload = {
         lead_id: leadId,
-        total_price: 0, // calculate from menu if needed
+        total_price: 0,
         order_data: {
           menu: menu,
           services: selectedServices,
@@ -181,8 +218,15 @@ export default function ChatModal({ onClose }) {
 
   return (
     <>
-      <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />
-      <div className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} role="dialog" aria-modal aria-label="Catersmart Beratung">
+      {isOpen && <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />}
+      
+      <div 
+        className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} 
+        style={{ display: isOpen ? 'flex' : 'none' }}
+        role="dialog" 
+        aria-modal 
+        aria-label="Catersmart Beratung"
+      >
         <div className="modal__header">
           <ProgressTimeline step={step} onNavigate={step < 4 ? handleNavigate : () => {}} />
           {step < 4 && (
@@ -224,18 +268,27 @@ export default function ChatModal({ onClose }) {
           )}
           {step === 5 && (
             <div style={{ padding: '60px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-              <div style={{ fontSize: '4rem', marginBottom: '20px', animation: 'bounce 2s infinite' }}>🎉🥚✨</div>
-              <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#037A8B', marginBottom: '16px' }}>Frohe Ostern & Guten Appetit!</h2>
+              <div style={{ fontSize: '4rem', marginBottom: '20px' }}>🥂🍽️✨</div>
+              <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#037A8B', marginBottom: '16px' }}>Vielen Dank für Ihre Anfrage!</h2>
               <p style={{ fontSize: '1.2rem', color: '#475569', maxWidth: '600px', lineHeight: '1.6', marginBottom: '40px' }}>
-                Deine Anfrage wurde erfolgreich übermittelt! Wir zaubern jetzt im Hintergrund und melden uns in Kürze bei dir.
+                Wir haben Ihre Details erhalten und melden uns in Kürze bei Ihnen. Sie können den Status jederzeit in Ihrem Profil einsehen.
               </p>
-              <button className="btn-filled" onClick={onClose} style={{ padding: '16px 40px', fontSize: '1.1rem' }}>Zurück zur Startseite</button>
-              <style jsx>{`
-                @keyframes bounce {
-                  0%, 100% { transform: translateY(0); }
-                  50% { transform: translateY(-20px); }
-                }
-              `}</style>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <button 
+                  className="btn-filled" 
+                  onClick={() => { onClose(); navigate('/profile'); }} 
+                  style={{ padding: '16px 40px', fontSize: '1.1rem' }}
+                >
+                  Zu meinen Bestellungen
+                </button>
+                <button 
+                  className="btn-outlined" 
+                  onClick={onClose} 
+                  style={{ padding: '16px 40px', fontSize: '1.1rem' }}
+                >
+                  Schließen
+                </button>
+              </div>
             </div>
           )}
         </div>

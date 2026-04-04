@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { API_URL } from '../../config'
+import DishImage from './DishImage'
 
 const COURSE_META = [
   { key: 'vorspeise',    label: 'Vorspeise',     fallbackImg: 'https://images.unsplash.com/photo-1626808642875-0aa545482dfb?auto=format&fit=crop&w=480&q=80' },
@@ -191,11 +192,17 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
               if (!dish && course.key === 'hauptspeise2') return null
               
               const dishName = dish && typeof dish === 'object' ? dish.name : (dish || '–')
-              const dishImg = (dish && dish.image_url) ? dish.image_url : course.fallbackImg
               
               return (
                 <div key={course.key} style={{ display: 'flex', gap: '16px', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #eef2f6' }}>
-                  <img src={dishImg} alt={course.label} style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
+                  <div style={{ width: '80px', height: '60px', borderRadius: '8px', overflow: 'hidden' }}>
+                    <DishImage 
+                      src={dish?.image_url} 
+                      alt={dishName} 
+                      category={course.key.includes('hauptspeise') ? 'hauptgericht' : course.key}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </div>
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: '0.7rem', color: '#037A8B', fontWeight: 700, textTransform: 'uppercase' }}>{course.label}</span>
                     <p style={{ fontWeight: 600, margin: '2px 0', fontSize: '0.95rem' }}>{dishName}</p>
@@ -357,13 +364,33 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       </div>
 
       {/* ── Story at the bottom ──────────────────────────── */}
-      <div style={{ marginTop: '40px', background: '#f0fdfa', padding: '32px', borderRadius: '24px', border: '1px solid #037A8B', textAlign: 'center' }}>
+      <div style={{ marginTop: '40px', background: '#f0fdfa', padding: '32px', borderRadius: '24px', border: '1px solid #037A8B', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#037A8B', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           ✨ Deine persönliche Menü-Story
         </h3>
         <p style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#1e293b', lineHeight: '1.6', maxWidth: '800px', margin: '0 auto' }}>
           "{story}"
         </p>
+        
+        {/* Easter Egg / Osterei */}
+        <div className="easter-egg-container" style={{ marginTop: '24px' }}>
+          <div className="pulsing-egg" style={{ fontSize: '2.5rem', cursor: 'pointer', display: 'inline-block' }} title="Ein kleines Extra für dich!">
+            🥚✨
+          </div>
+          <p style={{ fontSize: '0.75rem', color: '#037A8B', fontWeight: 700, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Oster-Special entdeckt!
+          </p>
+        </div>
+
+        <style jsx>{`
+          .pulsing-egg {
+            animation: egg-float 3s infinite ease-in-out;
+          }
+          @keyframes egg-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(5deg); }
+          }
+        `}</style>
       </div>
 
       {/* ── Absenden ─────────────────────────────────────────── */}
