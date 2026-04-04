@@ -8,6 +8,7 @@ class DBDish(Base):
     __tablename__ = "dishes"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, index=True, default="default")
     csv_id = Column(Integer, unique=True, index=True, nullable=True)
     name = Column(String, index=True, nullable=False)
     kategorie = Column(String, index=True, nullable=False)
@@ -22,6 +23,7 @@ class DBUser(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, index=True, default="default")
     firebase_uid = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=True)
@@ -31,6 +33,7 @@ class DBOrder(Base):
     __tablename__ = "orders"
     
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, index=True, default="default")
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     lead_id = Column(String, index=True, nullable=False)
     total_price = Column(Float, nullable=True)
@@ -42,6 +45,7 @@ class DBFeedback(Base):
     __tablename__ = "feedbacks"
     
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, index=True, default="default")
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     dish_id = Column(Integer, ForeignKey("dishes.id"), nullable=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)

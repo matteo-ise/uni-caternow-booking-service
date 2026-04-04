@@ -159,8 +159,7 @@ export default function ChatModal({ onClose }) {
       })
 
       if (resp.ok) {
-        alert('Deine Anfrage wurde erfolgreich übermittelt! 🎉 Du findest sie in deinem Profil.')
-        onClose()
+        setStep(5)
       } else {
         alert("Es gab ein Problem bei der Übermittlung.")
       }
@@ -172,15 +171,17 @@ export default function ChatModal({ onClose }) {
 
   return (
     <>
-      <div className="modal-backdrop" onClick={onClose} aria-hidden />
+      <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />
       <div className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} role="dialog" aria-modal aria-label="Catersmart Beratung">
         <div className="modal__header">
-          <ProgressTimeline step={step} onNavigate={handleNavigate} />
-          <button className="modal__close" onClick={onClose} aria-label="Schließen">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6"  y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <ProgressTimeline step={step} onNavigate={step < 4 ? handleNavigate : () => {}} />
+          {step < 4 && (
+            <button className="modal__close" onClick={onClose} aria-label="Schließen">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6"  y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          )}
         </div>
         <div className="modal__content">
           {step === 1 && <Step1Wizard onNext={data => { setWizardData(data); setStep(2) }} onClose={onClose} />}
@@ -198,7 +199,23 @@ export default function ChatModal({ onClose }) {
               </div>
             </div>
           )}
-          {step === 4 && <Step4Final menu={menu} selectedServices={selectedServices} wizardData={wizardData} onSubmit={handleSubmit} />}
+          {step === 4 && <Step4Final menu={menu} selectedServices={selectedServices} wizardData={wizardData} onSubmit={handleSubmit} userEmail={currentUser?.email} />}
+          {step === 5 && (
+            <div style={{ padding: '60px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '20px', animation: 'bounce 2s infinite' }}>🎉🥚✨</div>
+              <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#037A8B', marginBottom: '16px' }}>Frohe Ostern & Guten Appetit!</h2>
+              <p style={{ fontSize: '1.2rem', color: '#475569', maxWidth: '600px', lineHeight: '1.6', marginBottom: '40px' }}>
+                Deine Anfrage wurde erfolgreich übermittelt! Wir zaubern jetzt im Hintergrund und melden uns in Kürze bei dir.
+              </p>
+              <button className="btn-filled" onClick={onClose} style={{ padding: '16px 40px', fontSize: '1.1rem' }}>Zurück zur Startseite</button>
+              <style jsx>{`
+                @keyframes bounce {
+                  0%, 100% { transform: translateY(0); }
+                  50% { transform: translateY(-20px); }
+                }
+              `}</style>
+            </div>
+          )}
         </div>
       </div>
     </>

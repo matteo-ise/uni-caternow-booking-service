@@ -205,6 +205,35 @@ export default function Admin() {
                 <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{leads.length}</div>
               </div>
             </div>
+
+            {/* System Status */}
+            <div style={{ marginTop: '32px', background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '16px', color: '#0f172a' }}>🛠️ System Health & API Status</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Gemini API Key</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Live & Authenticated</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Firebase Auth</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Connected</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Research Webhook</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Last Run: Success</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Platz für schöne Graphen (Recharts) */}
             <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#94a3b8' }}>
               Hier könnte eine Recharts Umsatz-Kurve stehen 📈

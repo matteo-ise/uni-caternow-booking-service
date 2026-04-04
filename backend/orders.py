@@ -1,5 +1,7 @@
 import json
 import threading
+import re
+import google.generativeai as genai
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -9,6 +11,7 @@ from database import get_db
 from db_models import DBOrder, DBFeedback, DBDish, DBUser
 from auth import get_current_user, get_optional_user
 from embeddings import re_embed_dish
+from memory import get_memory
 
 router = APIRouter()
 
@@ -23,6 +26,33 @@ class FeedbackSubmit(BaseModel):
     rating: int
     comment: Optional[str] = None
     is_general: bool = False
+
+class StoryRequest(BaseModel):
+    lead_id: str
+
+@router.post("/checkout/story")
+async def get_checkout_story(req: StoryRequest):
+    """Generiert ein persönliches Storytelling für den Checkout basierend auf dem Memory."""
+    memory = get_memory(req.lead_id)
+    if not memory:
+        return {"story": "Schön, dass du dich für ein Catering von uns entschieden hast! Wir freuen uns darauf, dein Event kulinarisch zu begleiten."}
+    
+    model = genai.GenerativeModel("models/gemini-flash-lite-latest")
+    prompt = f"""
+    Basierend auf diesem Lead-Gedächtnis:
+    {memory}
+    
+    Schreibe einen extrem charmanten, kurzen Verkaufs-Gruß (max 3 Sätze) für die Checkout-Seite.
+    - Sprich den Kunden persönlich an (Du/Sie je nach Score).
+    - Nutze Storytelling: Erwähne den Anlass, die Firma oder eine Vorliebe (z.B. 'Passend zu eurem Firmenevent bei [Firma]...').
+    - Beende mit einem herzlichen Gruß in die Stadt des Kunden (falls bekannt, sonst allgemein).
+    - Der Text soll Hunger auf das Menü machen.
+    """
+    try:
+        response = model.generate_content(prompt)
+        return {"story": response.text.strip()}
+    except:
+        return {"story": "Dein perfektes Menü ist nur noch einen Klick entfernt. Wir freuen uns auf dein Event!"}
 
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
 async def submit_order(order: OrderSubmit, db: Session = Depends(get_db), current_user: Optional[dict] = Depends(get_optional_user)):

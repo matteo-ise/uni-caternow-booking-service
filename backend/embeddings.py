@@ -66,12 +66,18 @@ async def load_and_embed_dishes(force_refresh=False):
             try: preis = float(row.get("Preis1"))
             except: pass
 
-            # Konstruiere die Firebase Storage URL basierend auf der CSV-ID
-            # WICHTIG: Das Bucket muss in der .env definiert sein
             bucket = os.environ.get("VITE_FIREBASE_STORAGE_BUCKET")
             img_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket}/o/dishes%2F{csv_id}.jpg?alt=media"
 
-            names_to_embed.append(name)
+            # Rich Data Vector Construction
+            rich_features = []
+            for col in ["vegan", "vegetarisch", "kalt", "warm", "schwein", "rind", "geflügel", "fisch", "halal", "business", "high_class", "geburtstag", "hochzeit", "leicht_im_magen", "schwer_im_magen", "familienfeier", "italienisch", "mediterran", "spanisch", "französisch", "deutsch", "indisch", "asiatisch", "vital", "festlich", "gourmet", "bbq_grill"]:
+                if str(row.get(col, "0")).strip() == "1":
+                    rich_features.append(col.replace("_", " ").title())
+                    
+            rich_context = f"{name} ({kategorie}). Eigenschaften: {', '.join(rich_features)}."
+
+            names_to_embed.append(rich_context)
             gerichte_to_insert.append(DBDish(
                 csv_id=csv_id, 
                 name=name, 
