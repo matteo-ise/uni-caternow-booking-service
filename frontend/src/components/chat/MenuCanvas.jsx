@@ -57,24 +57,29 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
         {SECTIONS.map(section => {
           if (section.key === 'hauptspeise2' && !showH2) return null
           
-          const selected = menu[section.key]
+          const selected   = menu[section.key]
           const isConfirmed = confirmed[section.key]
           const hasOptions = (menuOptions[section.key] || []).length > 1
+
+          // Inaktiver Status: Weder ausgewählt noch bestätigt
+          const isActive = !!selected
 
           return (
             <div
               key={section.key}
               className={`canvas__section ${isConfirmed ? 'canvas__section--filled' : ''}`}
               style={{ 
-                opacity: isConfirmed ? 1 : 0.7,
-                border: isConfirmed ? '2px solid #037A8B' : '1px solid #eef2f6',
-                background: isConfirmed ? '#f0fdfa' : '#fff'
+                opacity: isConfirmed ? 1 : (isActive ? 0.9 : 0.5),
+                border: isConfirmed ? '2px solid #037A8B' : (isActive ? '1.5px solid #037A8B' : '1.5px solid #e2e8f0'),
+                background: isConfirmed ? '#f0fdfa' : (isActive ? '#fff' : '#f8fafc'),
+                filter: isActive || isConfirmed ? 'none' : 'grayscale(0.8)',
+                transition: 'all 0.4s ease'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <span className="bento-kpi">{section.kpi}</span>
-                  <div className="canvas__section-label" style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="bento-kpi" style={{ color: isActive || isConfirmed ? '#037A8B' : '#94a3b8' }}>{section.kpi}</span>
+                  <div className="canvas__section-label" style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: isActive || isConfirmed ? '#0f172a' : '#94a3b8' }}>
                     <span>{section.icon}</span> {section.label}
                   </div>
                 </div>
@@ -83,30 +88,40 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                   disabled={!selected}
                   style={{
                     background: isConfirmed ? '#037A8B' : 'transparent',
-                    color: isConfirmed ? '#fff' : '#037A8B',
-                    border: '1px solid #037A8B',
+                    color: isConfirmed ? '#fff' : (selected ? '#037A8B' : '#94a3b8'),
+                    border: '1px solid',
+                    borderColor: isConfirmed ? '#037A8B' : (selected ? '#037A8B' : '#e2e8f0'),
                     padding: '4px 12px',
                     borderRadius: '8px',
                     fontSize: '0.7rem',
                     fontWeight: 700,
-                    cursor: 'pointer'
+                    cursor: selected ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   {isConfirmed ? 'Geprüft ✓' : 'Bestätigen'}
                 </button>
               </div>
 
-              {selected?.image_url && (
-                <div style={{ marginTop: '12px', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
+              {selected?.image_url ? (
+                <div style={{ 
+                  marginTop: '12px', 
+                  width: '100%', 
+                  height: '100px', 
+                  borderRadius: '8px', 
+                  overflow: 'hidden', 
+                  border: '1px solid #eee',
+                  filter: isConfirmed ? 'none' : 'sepia(0.2) brightness(0.9)'
+                }}>
                   <img src={selected.image_url} alt={selected.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-              )}
+              ) : null}
 
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {hasOptions && !isConfirmed && (
-                  <button onClick={() => handlePrev(section.key)} className="nav-btn">‹</button>
+                  <button onClick={() => handlePrev(section.key)} className="nav-btn" disabled={!isActive}>‹</button>
                 )}
-                
+
                 <div style={{ flex: 1 }}>
                   {selected ? (
                     <div style={{ textAlign: 'center' }}>
@@ -130,36 +145,46 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', padding: '10px' }}>
-                      <div className="pulse-placeholder" style={{ height: '14px', width: '60%', background: '#f1f5f9', borderRadius: '4px', margin: '0 auto 8px' }}></div>
-                      <div style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.02em' }}>ANALYSE LÄUFT...</div>
+                      <div className="pulse-placeholder" style={{ height: '12px', width: '50%', background: '#e2e8f0', borderRadius: '4px', margin: '0 auto 8px' }}></div>
+                      <div style={{ color: '#cbd5e1', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.05em' }}>INAKTIV</div>
                     </div>
                   )}
                 </div>
 
                 {hasOptions && !isConfirmed && (
-                  <button onClick={() => handleNext(section.key)} className="nav-btn">›</button>
+                  <button onClick={() => handleNext(section.key)} className="nav-btn" disabled={!isActive}>›</button>
                 )}
               </div>
             </div>
           )
-        })}
-      </div>
+          })}
+          </div>
 
-      {step === 2 && (
-        <div style={{ padding: '20px' }}>
+          {step === 2 && (
+          <div style={{ padding: '20px' }}>
           <button
             className={`canvas__confirm-btn ${allFilled ? 'canvas__confirm-btn--active' : ''}`}
             disabled={!allFilled}
             onClick={onConfirm}
-            style={{ width: '100%', padding: '16px', borderRadius: '12px', fontWeight: 800, background: allFilled ? '#037A8B' : '#e2e8f0' }}
+            style={{ 
+              width: '100%', 
+              padding: '16px', 
+              borderRadius: '12px', 
+              fontWeight: 800, 
+              background: allFilled ? '#037A8B' : '#f1f5f9',
+              color: allFilled ? '#fff' : '#94a3b8',
+              border: 'none',
+              cursor: allFilled ? 'pointer' : 'not-allowed',
+              transition: 'all 0.3s ease'
+            }}
           >
             Menü verbindlich anfragen
           </button>
-        </div>
-      )}
+          </div>
+          )}
 
-      <style jsx>{`
-        .nav-btn {
+          <style jsx>{`
+          .nav-btn {
           background: #f1f5f9;
           border: none;
           width: 32px;
@@ -171,9 +196,13 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
           cursor: pointer;
           font-weight: 800;
           color: #037A8B;
-        }
-        .nav-btn:hover { background: #e2e8f0; }
-      `}</style>
+          }
+          .nav-btn:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+          }
+          .nav-btn:hover:not(:disabled) { background: #e2e8f0; }
+          `}</style>
     </div>
   )
 }

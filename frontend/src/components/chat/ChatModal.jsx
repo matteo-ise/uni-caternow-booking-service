@@ -134,8 +134,8 @@ export default function ChatModal({ onClose }) {
 
   function handleMenuConfirm() {
     setStep(3)
-    addBotMessage("Hervorragende Wahl! Das sieht nach einem absoluten Festmahl aus. ✨ Möchtest du noch Services wie Geschirr oder Personal dazu buchen?")
-    setQuickReplies(['Geschirr & Besteck', 'Servicepersonal', 'Deko & Blumen', 'Nein, danke'])
+    addBotMessage("Hervorragende Wahl! Das sieht nach einem absoluten Festmahl aus. ✨ Welche zusätzlichen Leistungen benötigen Sie?")
+    setQuickReplies(['Geschirr/Besteck', 'Gläser', 'Dekoration', 'Personal (z. B. Servicekräfte, Barkeeper)', 'Mietmöbel (z. B. Tische, Stühle)', 'Nein, danke'])
   }
 
   function handleWeiter() { setStep(4) }
@@ -201,6 +201,7 @@ export default function ChatModal({ onClose }) {
                   messages={messages.map(m => ({ role: m.role === 'model' ? 'bot' : m.role, text: m.content }))}
                   inputValue={inputValue} onInput={setInputValue} onSend={handleSend} onQuickReply={handleSend} quickReplies={quickReplies} isWaiting={isWaiting}
                   isEventSelection={isEventSelection} onEventSelect={handleEventSelect} isGlow={hasSelectedEvent && !isWaiting}
+                  customerType={wizardData.customerType}
                 />
               </div>
               <div className="chat-layout__right">
@@ -209,7 +210,17 @@ export default function ChatModal({ onClose }) {
               </div>
             </div>
           )}
-          {step === 4 && <Step4Final menu={menu} selectedServices={selectedServices} wizardData={wizardData} onSubmit={handleSubmit} userEmail={currentUser?.email} />}
+          {step === 4 && (
+            <Step4Final 
+              menu={menu} 
+              selectedServices={selectedServices} 
+              wizardData={wizardData} 
+              onSubmit={handleSubmit} 
+              userEmail={currentUser?.email} 
+              userName={currentUser?.displayName}
+              leadId={leadId}
+            />
+          )}
           {step === 5 && (
             <div style={{ padding: '60px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
               <div style={{ fontSize: '4rem', marginBottom: '20px', animation: 'bounce 2s infinite' }}>🎉🥚✨</div>

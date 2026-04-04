@@ -24,7 +24,7 @@ export default function Admin() {
 
   const handleLogin = (e) => {
     e.preventDefault()
-    if (password === 'caternow-god-mode') {
+    if (password === 'caternow-admin') {
       setIsAuthorized(true)
       localStorage.setItem('adminAuthorized', 'true')
       localStorage.setItem('adminPassword', password) // Save for subsequent API calls

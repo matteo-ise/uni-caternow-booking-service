@@ -13,7 +13,7 @@ from embeddings import load_and_embed_dishes
 router = APIRouter()
 
 # Ein einfaches Admin-Passwort aus der .env oder Fallback
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "caternow-god-mode")
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "caternow-admin")
 MEMORY_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data", "memory"))
 DATA_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data"))
 

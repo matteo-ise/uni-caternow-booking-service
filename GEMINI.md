@@ -52,7 +52,7 @@ CaterNow is a high-end AI-powered B2B/B2C SaaS platform for catering booking. It
 ---
 
 ## 📊 Caterer Studio (Admin Panel)
-Access: `/admin` (Password: `caternow-god-mode`)
+Access: `/admin` (Password: `caternow-admin`)
 - **Dashboard:** Revenue tracking, order volume, and active lead count.
 - **System Health:** Real-time status lights for Gemini API, Firebase, and Database.
 - **Order Pipeline:** Full tracking of all incoming AI-generated bookings.
@@ -69,7 +69,7 @@ VITE_FIREBASE_API_KEY="..."
 VITE_FIREBASE_PROJECT_ID="..."
 GEMINI_API_KEY="..."
 DATABASE_URL="postgresql://..."
-ADMIN_SECRET="caternow-god-mode"
+ADMIN_SECRET="caternow-admin"
 ```
 
 ### 2. Startup Commands
