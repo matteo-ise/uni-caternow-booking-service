@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from database import Base
@@ -10,6 +11,7 @@ class DBDish(Base):
     name = Column(String, index=True, nullable=False)
     kategorie = Column(String, index=True, nullable=False)
     preis = Column(Float, nullable=True)
+    feedback_context = Column(Text, nullable=True, default="")
     
     # Gemini embedding model
     embedding = Column(Vector(3072))
@@ -23,3 +25,31 @@ class DBUser(Base):
     name = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class DBOrder(Base):
+    __tablename__ = "orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    lead_id = Column(String, index=True, nullable=False)
+    total_price = Column(Float, nullable=True)
+    status = Column(String, default="neu")
+    order_data = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class DBFeedback(Base):
+    __tablename__ = "feedbacks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    dish_id = Column(Integer, ForeignKey("dishes.id"), nullable=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
+    rating = Column(Integer, nullable=True)
+    comment = Column(Text, nullable=True)
+    is_general = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class DBSyncState(Base):
+    __tablename__ = "sync_state"
+    id = Column(Integer, primary_key=True)
+    csv_hash = Column(String, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())

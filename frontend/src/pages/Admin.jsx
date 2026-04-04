@@ -2,69 +2,120 @@ import { useState, useEffect } from 'react'
 
 export default function Admin() {
   const [password, setPassword] = useState('')
-  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [isAuthorized, setIsAuthorized] = useState(() => {
+    return localStorage.getItem('adminAuthorized') === 'true'
+  })
+  
+  const [activeTab, setActiveTab] = useState('analytics')
+  
   const [leads, setLeads] = useState([])
+  const [orders, setOrders] = useState([])
+  const [feedbacks, setFeedbacks] = useState([])
+  const [dishes, setDishes] = useState([])
+  
   const [selectedLead, setSelectedLead] = useState(null)
   const [memoryContent, setMemoryContent] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (isAuthorized) {
+      fetchAllData()
+    }
+  }, [isAuthorized])
 
   const handleLogin = (e) => {
     e.preventDefault()
     if (password === 'caternow-god-mode') {
       setIsAuthorized(true)
-      fetchLeads()
+      localStorage.setItem('adminAuthorized', 'true')
+      localStorage.setItem('adminPassword', password) // Save for subsequent API calls
     } else {
       alert('Falsches Passwort!')
     }
   }
 
+  const handleLogout = () => {
+    setIsAuthorized(false)
+    localStorage.removeItem('adminAuthorized')
+    localStorage.removeItem('adminPassword')
+  }
+
+  const fetchAllData = async () => {
+    await Promise.all([
+      fetchLeads(),
+      fetchOrders(),
+      fetchFeedbacks(),
+      fetchDishes()
+    ])
+  }
+
+  const getAdminToken = () => localStorage.getItem('adminPassword') || password
+
   const fetchLeads = async () => {
-    setLoading(true)
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/leads', {
-        headers: { 'X-Admin-Token': password }
-      })
-      if (resp.ok) {
-        const data = await resp.json()
-        setLeads(data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+      const resp = await fetch('http://localhost:8000/api/admin/leads', { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setLeads(await resp.json())
+    } catch (err) { console.error(err) }
+  }
+
+  const fetchOrders = async () => {
+    try {
+      const resp = await fetch('http://localhost:8000/api/admin/orders', { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setOrders(await resp.json())
+    } catch (err) { console.error(err) }
+  }
+
+  const fetchFeedbacks = async () => {
+    try {
+      const resp = await fetch('http://localhost:8000/api/admin/feedbacks', { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setFeedbacks(await resp.json())
+    } catch (err) { console.error(err) }
+  }
+
+  const fetchDishes = async () => {
+    try {
+      const resp = await fetch('http://localhost:8000/api/admin/dishes', { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setDishes(await resp.json())
+    } catch (err) { console.error(err) }
   }
 
   const fetchMemory = async (leadId) => {
     setSelectedLead(leadId)
     setMemoryContent('Lade Memory...')
     try {
-      const resp = await fetch(`http://localhost:8000/api/admin/memory/${leadId}`, {
-        headers: { 'X-Admin-Token': password }
-      })
+      const resp = await fetch(`http://localhost:8000/api/admin/memory/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) {
         const data = await resp.json()
         setMemoryContent(data.content)
       }
-    } catch (err) {
-      setMemoryContent('Fehler beim Laden.')
-    }
+    } catch (err) { setMemoryContent('Fehler beim Laden.') }
   }
 
-  // Auto-refresh selected memory every 5 seconds for "live" feel
-  useEffect(() => {
-    let interval
-    if (isAuthorized && selectedLead) {
-      interval = setInterval(() => fetchMemory(selectedLead), 5000)
+  // File Upload
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const resp = await fetch('http://localhost:8000/api/admin/upload-csv', {
+        method: 'POST',
+        headers: { 'X-Admin-Token': getAdminToken() },
+        body: formData
+      });
+      if (resp.ok) {
+        alert("CSV erfolgreich hochgeladen! Neue Vektoren werden beim Server-Neustart berechnet (wenn die DB zurückgesetzt wird) oder ein Hintergrund-Job könnte dies übernehmen.");
+        fetchDishes();
+      }
+    } catch(err) {
+      console.error(err)
     }
-    return () => clearInterval(interval)
-  }, [isAuthorized, selectedLead])
+  }
 
   if (!isAuthorized) {
     return (
       <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: '#0f172a' }}>
         <form onSubmit={handleLogin} style={{ background: '#1e293b', padding: '40px', borderRadius: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', width: '400px' }}>
-          <h1 style={{ color: '#fff', marginBottom: '24px', fontSize: '1.5rem', textAlign: 'center' }}>CaterNow Admin Mode</h1>
+          <h1 style={{ color: '#fff', marginBottom: '24px', fontSize: '1.5rem', textAlign: 'center' }}>Caterer Studio</h1>
           <input 
             type="password" 
             placeholder="Admin Passwort" 
@@ -73,63 +124,222 @@ export default function Admin() {
             style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#fff', marginBottom: '16px' }}
           />
           <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#037A8B', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
-            Unlock God Mode
+            Unlock Studio
           </button>
         </form>
       </div>
     )
   }
 
+  // Metrics calculation
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const totalOrders = orders.length;
+
   return (
-    <div style={{ height: '100vh', display: 'flex', background: '#f1f5f9', fontFamily: 'Montserrat, sans-serif' }}>
-      {/* Sidebar: Leads */}
-      <div style={{ width: '300px', background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Aktive Leads</h2>
-          <button onClick={fetchLeads} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037A8B' }}>🔄</button>
+    <div style={{ display: 'flex', height: '100vh', background: '#f8fafc', fontFamily: 'Montserrat, sans-serif' }}>
+      
+      {/* Sidebar */}
+      <div style={{ width: '260px', background: '#ffffff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '24px', fontWeight: 800, fontSize: '1.2rem', color: '#0f172a', borderBottom: '1px solid #e2e8f0' }}>
+          Caterer Studio
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {leads.map(lead => (
-            <div 
-              key={lead.id} 
-              onClick={() => fetchMemory(lead.id)}
-              style={{ 
-                padding: '16px 24px', 
-                borderBottom: '1px solid #f1f5f9', 
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '16px', flex: 1 }}>
+          {['analytics', 'orders', 'menu', 'feedback', 'memory'].map(tab => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                textAlign: 'left',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: activeTab === tab ? '#e0f2fe' : 'transparent',
+                color: activeTab === tab ? '#0369a1' : '#64748b',
+                fontWeight: activeTab === tab ? 700 : 500,
                 cursor: 'pointer',
-                background: selectedLead === lead.id ? '#f0f9ff' : 'transparent',
-                borderLeft: selectedLead === lead.id ? '4px solid #037A8B' : '4px solid transparent'
+                textTransform: 'capitalize'
               }}
             >
-              <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{lead.id}</div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                Update: {new Date(lead.last_updated * 1000).toLocaleTimeString()}
-              </div>
-            </div>
+              {tab === 'memory' ? 'AI Memory (Leads)' : tab}
+            </button>
           ))}
+        </nav>
+        <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0' }}>
+          <button 
+            onClick={handleLogout}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#fff1f2',
+              color: '#991b1b',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Logout
+          </button>
         </div>
       </div>
 
-      {/* Main: Memory Viewer */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '20px 40px', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-            {selectedLead ? `Live Memory: ${selectedLead}` : 'Wähle einen Lead aus'}
-          </h1>
-        </div>
-        <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
-          {selectedLead ? (
-            <div style={{ background: '#fff', padding: '40px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', minHeight: '100%' }}>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: '1.6', color: '#1e293b' }}>
-                {memoryContent}
-              </pre>
+      {/* Main Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
+        
+        {/* ANALYTICS */}
+        {activeTab === 'analytics' && (
+          <div>
+            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '24px' }}>Dashboard</h1>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Gesamtumsatz</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{totalRevenue.toFixed(2)} €</div>
+              </div>
+              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Bestellungen</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{totalOrders}</div>
+              </div>
+              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Aktive Leads (AI Memory)</div>
+                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{leads.length}</div>
+              </div>
             </div>
-          ) : (
-            <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-              Hier erscheint das Live-Gedächtnis des Leads...
+            {/* Platz für schöne Graphen (Recharts) */}
+            <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#94a3b8' }}>
+              Hier könnte eine Recharts Umsatz-Kurve stehen 📈
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* ORDERS */}
+        {activeTab === 'orders' && (
+          <div>
+            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '24px' }}>Bestellungen (Pipeline)</h1>
+            <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <tr>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>ID</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Lead ID</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Status</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Umsatz</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Datum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '16px' }}>#{o.id}</td>
+                      <td style={{ padding: '16px', fontWeight: 600 }}>{o.lead_id}</td>
+                      <td style={{ padding: '16px' }}>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600 }}>{o.status}</span>
+                      </td>
+                      <td style={{ padding: '16px', fontWeight: 700 }}>{o.total_price} €</td>
+                      <td style={{ padding: '16px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {orders.length === 0 && <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center' }}>Keine Bestellungen vorhanden.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* MENU MANAGER */}
+        {activeTab === 'menu' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Menu Manager</h1>
+              <div>
+                <label style={{ background: '#037A8B', color: '#fff', padding: '12px 20px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+                  Neue CSV hochladen
+                  <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFileUpload} />
+                </label>
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+              {dishes.map(d => (
+                <div key={d.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#037A8B', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>{d.kategorie}</div>
+                  <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: '4px' }}>{d.name}</div>
+                  <div style={{ color: '#64748b', marginBottom: '16px' }}>{d.preis ? `${d.preis.toFixed(2)} €` : 'Preis auf Anfrage'}</div>
+                  
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#475569' }}>
+                    <strong>AI Feedback Context:</strong><br/>
+                    {d.feedback_context ? d.feedback_context : <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>Noch kein Feedback vorhanden</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* FEEDBACK CENTER */}
+        {activeTab === 'feedback' && (
+          <div>
+            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '24px' }}>Kunden-Feedback</h1>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {feedbacks.map(f => (
+                <div key={f.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', display: 'flex', gap: '24px' }}>
+                  <div style={{ flex: '0 0 100px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2rem' }}>{'⭐️'.repeat(f.rating)}{'🌑'.repeat(5 - f.rating)}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '8px' }}>{new Date(f.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '8px', color: '#0f172a' }}>
+                      {f.is_general ? 'Allgemeines Feedback' : `Feedback zu Gericht: ${f.dish_name}`}
+                    </div>
+                    <p style={{ color: '#475569', lineHeight: '1.6', margin: 0 }}>"{f.comment}"</p>
+                  </div>
+                </div>
+              ))}
+              {feedbacks.length === 0 && <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>Kein Feedback vorhanden.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* MEMORY (OLD ADMIN) */}
+        {activeTab === 'memory' && (
+          <div style={{ display: 'flex', height: '100%', gap: '24px' }}>
+            <div style={{ width: '300px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
+                Aktive Chat-Sessions
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {leads.map(lead => (
+                  <div 
+                    key={lead.id} 
+                    onClick={() => fetchMemory(lead.id)}
+                    style={{ 
+                      padding: '16px', 
+                      borderBottom: '1px solid #f1f5f9', 
+                      cursor: 'pointer',
+                      background: selectedLead === lead.id ? '#e0f2fe' : 'transparent',
+                      borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent'
+                    }}
+                  >
+                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{lead.id}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px', overflowY: 'auto' }}>
+              {selectedLead ? (
+                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: '1.6', color: '#1e293b', margin: 0 }}>
+                  {memoryContent}
+                </pre>
+              ) : (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                  Wähle einen Lead aus der Liste, um das Live-Gedächtnis zu sehen.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )

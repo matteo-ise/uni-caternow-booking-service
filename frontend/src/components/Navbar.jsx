@@ -1,5 +1,6 @@
 import logo from '../assets/caternow-logo.svg'
 import { useAuth } from '../context/AuthContext'
+import { Link } from 'react-router-dom'
 
 export default function Navbar() {
   const { currentUser, loginWithGoogle, logout } = useAuth()
@@ -7,13 +8,13 @@ export default function Navbar() {
   return (
     <nav className="nav">
       <div className="nav-left">
-        <a href="#" className="brand">
+        <Link to="/" className="brand">
           <img src={logo} alt="CaterNow Logo" className="brand-logo" />
           <div className="brand-text">
             <div className="brand-title">CaterNow</div>
             <div className="brand-tag">Catering. Simplified.</div>
           </div>
-        </a>
+        </Link>
 
         <ul className="nav-links">
           <li><a href="#wie-es-funktioniert">So funktioniert's</a></li>
@@ -26,18 +27,20 @@ export default function Navbar() {
       <div className="nav-right">
         <button className="pill-btn">DE ▾</button>
         {currentUser ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {currentUser.photoURL ? (
-              <img 
-                src={currentUser.photoURL} 
-                alt="Profile" 
-                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
-                title={currentUser.displayName}
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span style={{ fontWeight: 'bold' }}>{currentUser.displayName || currentUser.email}</span>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link to="/profile" style={{ textDecoration: 'none', color: '#1e293b', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {currentUser.photoURL ? (
+                <img 
+                  src={currentUser.photoURL} 
+                  alt="Profile" 
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
+                  title={currentUser.displayName}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span>{currentUser.displayName || currentUser.email}</span>
+              )}
+            </Link>
             <button onClick={logout} className="link-muted" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
               Logout
             </button>
@@ -51,3 +54,4 @@ export default function Navbar() {
     </nav>
   )
 }
+

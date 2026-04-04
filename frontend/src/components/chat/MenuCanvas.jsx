@@ -33,7 +33,13 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
   }
 
   const toggleConfirm = (key) => {
-    setConfirmed(prev => ({ ...prev, [key]: !prev[key] }))
+    const newState = !confirmed[key]
+    setConfirmed(prev => ({ ...prev, [key]: newState }))
+    
+    // Wenn Hauptspeise 1 bestätigt wurde, benachrichtige den Chat für Upselling
+    if (key === 'hauptspeise1' && newState && onSelect) {
+      onSelect('TRIGGER_UPSELL', true)
+    }
   }
 
   return (

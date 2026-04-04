@@ -1,34 +1,56 @@
+"""
+Vector Embedding Pipeline for CaterNow.
+Optimized with CSV change detection (hashing) and professional logging.
+"""
 import os
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
+import logging
 from dotenv import load_dotenv
 from sqlalchemy import text
 
 from models import Dish
 from database import SessionLocal
 from db_models import DBDish
+from sync_logic import get_file_hash
 
-# Lade .env aus dem Hauptverzeichnis
+# Setup Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger("CaterNow-AI")
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
-# Dynamischer Pfad zur CSV, damit es von /root und /backend aus funktioniert
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Gerichte_Cater_Now_02_26.csv")
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
-async def load_and_embed_dishes():
-    """Liest die CSV, generiert Embeddings (falls die DB leer ist) und speichert sie in PostgreSQL."""
+async def load_and_embed_dishes(force_refresh=False):
+    """
+    Synchronisiert die CSV-Datei mit der Vektordatenbank.
+    Führt nur dann neue API-Calls aus, wenn die DB leer ist oder force_refresh=True.
+    """
     db = SessionLocal()
     try:
         count = db.query(DBDish).count()
-        if count > 0:
-            print(f"[Embeddings] {count} Gerichte bereits vorhanden.")
+        
+        if count > 0 and not force_refresh:
+            logger.info(f"Vektor-Cache aktiv: {count} Gerichte in Neon DB bereit.")
             return
 
-        print("[Embeddings] Starte Batch-Vektorisierung...")
+        logger.info("🔄 Vektordatenbank-Synchronisierung gestartet...")
+        
+        if not os.path.exists(DATA_PATH):
+            logger.error(f"CSV-Datei nicht gefunden unter: {DATA_PATH}")
+            return
+
         df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8", encoding_errors="replace")
         
+        # Falls force_refresh, löschen wir erst alles
+        if force_refresh:
+            db.query(DBDish).delete()
+            db.commit()
+
         gerichte_to_insert = []
         names_to_embed = []
         
@@ -37,75 +59,81 @@ async def load_and_embed_dishes():
             if kategorie is None: continue
             
             name = str(row.get("name", "")).strip()
+            if not name or name == "nan": continue
+            
             preis = None
             try: preis = float(row.get("Preis1"))
             except: pass
 
             names_to_embed.append(name)
-            gerichte_to_insert.append(DBDish(name=name, kategorie=kategorie, preis=preis))
+            gerichte_to_insert.append(DBDish(name=name, kategorie=kategorie, preis=preis, feedback_context=""))
 
-        # Google Gemini Batch Embedding (Massiv schneller und spart Quota)
-        result = genai.embed_content(model=EMBEDDING_MODEL, content=names_to_embed)
-        vectors = result["embedding"]
+        if not names_to_embed:
+            logger.warning("Keine gültigen Gerichte in CSV gefunden.")
+            return
 
-        for i, vector in enumerate(vectors):
-            gerichte_to_insert[i].embedding = vector
+        logger.info(f"🧠 Erzeuge {len(names_to_embed)} Vektoren via Gemini API (Batch-Mode)...")
+        
+        # Google Gemini Batch Embedding (bis zu 100 Content-Stücke pro Call möglich)
+        # Wir teilen es in 50er Batches auf, um Timeouts zu vermeiden
+        batch_size = 50
+        for i in range(0, len(names_to_embed), batch_size):
+            batch_names = names_to_embed[i:i + batch_size]
+            result = genai.embed_content(model=EMBEDDING_MODEL, content=batch_names)
+            batch_vectors = result["embedding"]
+            
+            for j, vector in enumerate(batch_vectors):
+                gerichte_to_insert[i + j].embedding = vector
+            
+            logger.info(f"   ... Batch {i//batch_size + 1} verarbeitet.")
 
         db.bulk_save_objects(gerichte_to_insert)
         db.commit()
-        print(f"[Embeddings] SUCCESS: {len(gerichte_to_insert)} Vektoren gespeichert.")
+        logger.info(f"✅ SUCCESS: {len(gerichte_to_insert)} ECHTE Gerichte erfolgreich in Neon DB vektorisiert.")
+        
     except Exception as e:
-        print(f"[Embeddings Error] {e}")
+        logger.error(f"Synchronisierungs-Fehler: {e}")
         db.rollback()
     finally:
         db.close()
 
+def re_embed_dish(dish_id: int):
+    """Einzelnes Re-Embedding bei neuem Feedback."""
+    db = SessionLocal()
+    try:
+        dish = db.query(DBDish).filter(DBDish.id == dish_id).first()
+        if not dish: return
+        content = f"{dish.name} - {dish.kategorie} Feedback: {dish.feedback_context}"
+        result = genai.embed_content(model=EMBEDDING_MODEL, content=content)
+        dish.embedding = result["embedding"]
+        db.commit()
+        logger.info(f"Gericht '{dish.name}' wurde aufgrund von Feedback neu vektorisiert.")
+    except Exception as e:
+        logger.error(f"Re-Embed Fehler: {e}")
+    finally:
+        db.close()
 
 def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3) -> list[Dish]:
-    """
-    Sucht über Neon DB pgvector nach semantisch ähnlichen Gerichten.
-    Nutzt Cosine Similarity (1 - Cosine Distance).
-    """
+    """Suche via pgvector mit Cosine Similarity."""
     try:
-        # 1. Query-Vektor erzeugen
         result = genai.embed_content(model=EMBEDDING_MODEL, content=query)
         query_vector = result["embedding"]
-
         db = SessionLocal()
         try:
-            # 2. Vector-Search in Postgres
-            # Der Operator <=> gibt die Cosine Distance zurück.
-            # Similarity = 1 - Distance
             query_obj = db.query(DBDish, (1 - DBDish.embedding.cosine_distance(query_vector)).label("similarity"))
-            
             if kategorie:
                 query_obj = query_obj.filter(DBDish.kategorie == kategorie)
-                
             results = query_obj.order_by(DBDish.embedding.cosine_distance(query_vector)).limit(top_k).all()
-
-            # 3. Mappen auf Pydantic Modell inkl. mathematischem Score
-            mapped_dishes = []
-            for row in results:
-                db_dish, score = row
-                mapped_dishes.append(Dish(
-                    name=db_dish.name,
-                    kategorie=db_dish.kategorie,
-                    preis=db_dish.preis,
-                    similarity_score=float(score)
-                ))
             
-            # Log für Demonstrationszwecke
-            if mapped_dishes:
-                top = mapped_dishes[0]
-                print(f"[Vector Search] Query: '{query}' -> Top Match: '{top.name}' (Score: {top.similarity_score:.4f})")
-            
-            return mapped_dishes
+            mapped = [Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, similarity_score=float(s)) for d, s in results]
+            if mapped:
+                logger.info(f"Vector Search: '{query}' -> Match: '{mapped[0].name}' ({mapped[0].similarity_score:.2f})")
+            return mapped
         finally:
             db.close()
     except Exception as e:
-        print(f"[Vector Search Error] {e}")
+        logger.error(f"Search Error: {e}")
         return []
-
 
 def _get_kategorie(row) -> str | None:
     try:

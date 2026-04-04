@@ -116,6 +116,10 @@ export default function ChatModal({ onClose }) {
   }, [messages, isWaiting, wizardData, leadId])
 
   function handleMenuSelect(course, dish) {
+    if (course === 'TRIGGER_UPSELL') {
+      handleSend("Hauptspeise 1 gefällt mir sehr gut! Was würdest du als zweite Hauptspeise dazu empfehlen, damit für jeden Gast etwas dabei ist?")
+      return
+    }
     setMenu(prev => ({ ...prev, [course]: dish }))
   }
 
@@ -127,7 +131,44 @@ export default function ChatModal({ onClose }) {
 
   function handleWeiter() { setStep(4) }
   function handleNavigate(targetStep) { setStep(targetStep) }
-  function handleSubmit() { alert('Bestellung abgeschickt! Wir melden uns in Kürze bei dir. 🚀') }
+  async function handleSubmit() {
+    if (!currentUser) {
+      alert("Bitte logge dich ein, um die Anfrage abzuschließen!")
+      return
+    }
+    
+    try {
+      const token = await currentUser.getIdToken()
+      const payload = {
+        lead_id: leadId,
+        total_price: 0, // calculate from menu if needed
+        order_data: {
+          menu: menu,
+          services: selectedServices,
+          event_details: wizardData
+        }
+      }
+
+      const resp = await fetch('http://localhost:8000/api/orders', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (resp.ok) {
+        alert('Deine Anfrage wurde erfolgreich übermittelt! 🎉 Du findest sie in deinem Profil.')
+        onClose()
+      } else {
+        alert("Es gab ein Problem bei der Übermittlung.")
+      }
+    } catch(err) {
+      console.error(err)
+      alert("Netzwerkfehler.")
+    }
+  }
 
   return (
     <>

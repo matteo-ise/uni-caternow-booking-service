@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import Navbar      from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import ChatButton  from './components/ChatButton'
 import ChatModal   from './components/chat/ChatModal'
 import Admin       from './pages/Admin'
+import Profile     from './pages/Profile'
+import { useAuth } from './context/AuthContext'
 
 function Home() {
   const [chatOpen, setChatOpen] = useState(false)
@@ -28,6 +30,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </Router>
   )
