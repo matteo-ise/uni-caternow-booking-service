@@ -74,6 +74,17 @@ export default function ChatModal({ onClose }) {
       if (response.ok) {
         const data = await response.json()
         addBotMessage(data.message)
+        
+        // Wenn die KI ein strukturiertes Menü schickt, injiziere es in den Canvas
+        if (data.menu) {
+          setMenu({
+            vorspeise: data.menu.vorspeise || null,
+            hauptspeise1: data.menu.hauptgericht || null, // Mapping auf Frontend-State
+            nachspeise: data.menu.dessert || null
+          })
+          // Wir können auch die Optionen aktualisieren, falls wir wollen, 
+          // aber hier setzen wir direkt die Auswahl.
+        }
       } else {
         throw new Error("API Error")
       }

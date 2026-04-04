@@ -48,6 +48,13 @@ def init_memory(lead_id: str, hard_facts: dict):
     path.write_text(content, encoding="utf-8")
 
 
+def get_memory(lead_id: str) -> str | None:
+    """Liest das vorhandene Gedächtnis eines Leads aus."""
+    path = _get_memory_path(lead_id)
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return None
+
 def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_facts: dict):
     """
     Diese Funktion liest die aktuelle Memory, füttert den neuen Chat-Austausch
