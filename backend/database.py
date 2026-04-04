@@ -8,10 +8,23 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-if not DATABASE_URL or not DATABASE_URL.startswith("postgresql"):
-    raise ValueError("Eine PostgreSQL Datenbank-URL (DATABASE_URL) ist zwingend erforderlich für pgvector (Vector Search). SQLite wird nicht unterstützt.")
+if not DATABASE_URL:
+    # Falls wir lokal sind und keine DB haben, nutzen wir SQLite für Basistests, 
+    # aber warnen, dass pgvector dann nicht funktioniert.
+    # In Produktion (Render) MUSS DATABASE_URL gesetzt sein.
+    print("[WARNING] DATABASE_URL nicht gefunden. Nutze SQLite Fallback (pgvector wird fehlschlagen!)")
+    DATABASE_URL = "sqlite:///./local_fallback.db"
 
-engine = create_engine(DATABASE_URL)
+# Render/Neon/Heroku liefern oft 'postgres://' - SQLAlchemy benötigt 'postgresql://'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Engine Konfiguration
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -27,10 +40,15 @@ def get_db():
 def init_db():
     """Initialisiert die DB, aktiviert die pgvector-Extension und legt die Tabellen an."""
     # pgvector Extension muss in der Datenbank existieren, bevor Tabellen mit Vector-Typ angelegt werden.
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    if not DATABASE_URL.startswith("sqlite"):
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            except Exception as e:
+                print(f"[Database] Warnung beim Aktivieren von pgvector: {e}")
     
     # Import hier, um Zirkulär-Imports zu vermeiden
     import db_models 
     Base.metadata.create_all(bind=engine)
+
 
