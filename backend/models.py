@@ -23,6 +23,7 @@ class WizardData(BaseModel):
 class ChatRequest(BaseModel):
     conversation: list[Message]
     wizardData: WizardData | None = None
+    leadId: str | None = None
 
 
 class Dish(BaseModel):

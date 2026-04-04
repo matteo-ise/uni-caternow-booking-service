@@ -4,6 +4,7 @@ Handles the RAG (Retrieval-Augmented Generation) logic, injecting similar dishes
 into the prompt and querying the Gemini API for conversational responses.
 """
 import os
+import threading
 import google.generativeai as genai
 from fastapi import APIRouter
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 from models import ChatRequest, ChatResponse, MenuSuggestion
 from embeddings import find_similar_dishes
 from research import run_company_research
+from memory import update_memory_async
 
 # Lade .env aus dem Hauptverzeichnis
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -20,17 +22,26 @@ router = APIRouter()
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
-BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der freundliche und kompetente Menü-Berater von CaterNow.
-Deine Aufgabe ist es, dem Kunden basierend auf seinen Wünschen ein personalisiertes 
-3-Gang-Menü (Vorspeise, Hauptspeise, Nachspeise) aus unserer Speisekarte zusammenzustellen.
+BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der wohl charmanteste, witzigste und fähigste Menü-Verkäufer der Welt. 
+Dein Ziel: Den Kunden absolut zu begeistern und ihm das perfekte 3-Gang-Catering von CaterNow zu verkaufen.
+
+DEINE PERSÖNLICHKEIT:
+- Du bist extrem charmant, etwas humorvoll und hast immer einen lockeren Spruch auf Lager.
+- Du verkaufst nicht nur Essen, du verkaufst ein Erlebnis.
+- Du bist ein Profi: Du nutzt ALLES, was du über den Kunden weißt (Firmenname, Werte, Farben, Slogan), um eine Verbindung aufzubauen.
+- Dein Tonfall ist empathisch: Du spürst, ob der Kunde eher locker (Du) oder seriös (Sie) behandelt werden will.
+
+DEINE MISSION:
+1. Nutze die "Research Intelligence" (Werte, Slogan, Farben) der Firma rigeros in deiner Argumentation.
+2. Schlage ein 3-Gang-Menü aus den "Verfügbaren Gerichten" vor, das perfekt zum "Fancy-Score" der Firma passt.
+3. Sei interaktiv: Frage nach Vorlieben, geh auf Wünsche ein und schlage Anpassungen vor.
+4. Sobald das Menü steht, präsentiere es wie ein Sterne-Kellner.
 
 Regeln:
 - Antworte immer auf Deutsch.
-- Nutze Emojis, aber dosiert.
-- Frage nach konkreten Vorlieben oder Allergien (z.B. vegetarisch, glutenfrei), falls noch nicht bekannt.
-- Schlage immer konkrete Gerichte aus der Liste der "Verfügbaren Gerichte" vor, anstatt generische Speisen zu erfinden.
-- Passe deinen Tonfall (konservativ/Sie vs. locker/Du) an den Kunden und den Anlass an.
-- Sobald du merkst, dass der Kunde zufrieden ist oder alle drei Gänge ausgewählt hat, fasse das Menü am Ende klar strukturiert zusammen.
+- Nutze Emojis passend zu deinem Charme.
+- Erfinde KEINE Gerichte. Nutze nur die Liste, die dir bereitgestellt wird.
+- Wenn du eine Firma stalkst und z.B. weißt, dass ihre Farbe "Grün" ist, erwähne das ("Passend zu eurem Marken-Grün haben wir...").
 """
 
 def _build_context_from_dishes(user_message: str) -> str:
@@ -50,6 +61,7 @@ def _build_context_from_dishes(user_message: str) -> str:
 async def chat(request: ChatRequest):
     conversation = request.conversation
     wizard_data = request.wizardData
+    lead_id = request.leadId or "anon-session"
 
     # 1. Letzte Usenachricht für Dish-Suche
     last_user_msg = next(
@@ -57,35 +69,37 @@ async def chat(request: ChatRequest):
     )
     dishes_context = _build_context_from_dishes(last_user_msg)
 
-    # 2. Dynamischen Prompt bauen (Personalisierung)
+    # 2. Dynamischen Prompt bauen (Personalisierung & Stalking)
     system_prompt = BASE_SYSTEM_PROMPT
+    hard_facts_for_memory = {}
     
     if wizard_data:
-        system_prompt += f"\n\n**Hintergrundinformationen zum Event:**\n"
-        system_prompt += f"- Event-Datum: {wizard_data.date or 'Unbekannt'}\n"
-        system_prompt += f"- Personenanzahl: {wizard_data.persons or 'Unbekannt'}\n"
-        system_prompt += f"- Budget/Person: {wizard_data.budget or 'Unbekannt'}\n"
-        system_prompt += f"- Kundentyp: {'B2B (Firmenkunde)' if wizard_data.customerType == 'business' else 'B2C (Privatkunde)'}\n"
+        hard_facts_for_memory = wizard_data.model_dump()
+        system_prompt += f"\n\n**Lead-Details:**\n"
+        system_prompt += f"- Datum: {wizard_data.date or 'Unbekannt'}\n"
+        system_prompt += f"- Personen: {wizard_data.persons or 'Unbekannt'}\n"
+        system_prompt += f"- Budget: {wizard_data.budget or 'Unbekannt'}\n"
 
-        # 3. The "Stalking" Engine (Research) für B2B Kunden
+        # 3. The "Stalking" Engine (Research)
         if wizard_data.customerType == "business" and (wizard_data.companyName or wizard_data.companyDomain):
             research = run_company_research(wizard_data.companyName, wizard_data.companyDomain)
             if research.is_business:
-                system_prompt += "\n**Research Intelligence (Firma):**\n"
-                system_prompt += f"Die KI hat die Firma '{research.company_name}' analysiert:\n"
-                # Handle possible missing values
-                core_values_str = ", ".join(research.core_values) if research.core_values else "Keine spezifischen Werte gefunden."
-                system_prompt += f"- Kernwerte: {core_values_str}\n"
-                system_prompt += f"- Fancy-Score: {research.fancy_score}/100 (1=Sehr konservativ/traditionell, 100=Sehr hip/experimentell/Startup)\n"
-                system_prompt += f"- Zusammenfassung: {research.summary or 'Keine Zusammenfassung verfügbar.'}\n"
+                hard_facts_for_memory.update(research.model_dump())
+                system_prompt += f"\n**RESEARCH INTELLIGENCE (NUTZE DIESE INFOS CHARMANT):**\n"
+                system_prompt += f"Firma: {research.company_name}\n"
+                system_prompt += f"Slogan: {research.slogan or 'Keiner bekannt'}\n"
+                system_prompt += f"Farben: {', '.join(research.company_colors)}\n"
+                system_prompt += f"Kernwerte: {', '.join(research.core_values)}\n"
+                system_prompt += f"Fancy-Score: {research.fancy_score}/100\n"
+                system_prompt += f"Zusammenfassung: {research.summary}\n"
                 
-                # Handlungsanweisung für Gemini basierend auf dem Score
+                # Strategie-Vorgabe
                 if research.fancy_score > 70:
-                    system_prompt += "-> WICHTIG: Die Firma ist sehr modern/hip. Duz-Kultur (Du/Euch) ist Pflicht! Empfiehl experimentelle, hippe oder vegane Gerichte. Sei locker und enthusiastisch im Tonfall.\n"
+                    system_prompt += "STRATEGIE: Startup-Vibe. Duzen. Sei kreativ, hip und mutig.\n"
                 elif research.fancy_score < 40:
-                    system_prompt += "-> WICHTIG: Die Firma ist eher traditionell/konservativ. Nutze zwingend das 'Sie'! Empfiehl klassische, bewährte Gerichte (z.B. Braten, klassische Suppen). Sei äußerst professionell und zurückhaltend mit Emojis.\n"
+                    system_prompt += "STRATEGIE: Traditions-Vibe. Siezen. Sei exzellent, förmlich und wertkonservativ.\n"
                 else:
-                    system_prompt += "-> WICHTIG: Die Firma ist ein gesundes Mittelmaß. Ein freundliches 'Du' ist okay, bleibe aber professionell. Biete einen Mix aus klassischen und modernen Gerichten an.\n"
+                    system_prompt += "STRATEGIE: Modernes KMU. Freundliches 'Du' oder 'Sie' je nach Gefühl. Professionell aber nahbar.\n"
 
     # 4. Gemini-Konversation aufbauen
     model = genai.GenerativeModel(
@@ -95,7 +109,7 @@ async def chat(request: ChatRequest):
 
     history = [
         {"role": m.role, "parts": [m.content]}
-        for m in conversation[:-1]  # alle außer der letzten Nachricht
+        for m in conversation[:-1]
     ]
     chat_session = model.start_chat(history=history)
 
@@ -105,8 +119,12 @@ async def chat(request: ChatRequest):
         reply_text = response.text
     except Exception as e:
         print(f"[Chat Error] {e}")
-        reply_text = "Entschuldigung, ich konnte leider nicht auf das Menü zugreifen. Bitte versuche es später noch einmal."
+        reply_text = "Ohje, da hat mir wohl jemand das Mikrofon ausgestöpselt. Kannst du das nochmal kurz wiederholen? 😉"
 
-    # TODO für Sprint 4: Hier das strukturierte JSON auslesen für `menu=MenuSuggestion(...)`
+    # 6. Live-Memory Update im Hintergrund (Parallel für Performance)
+    threading.Thread(
+        target=update_memory_async, 
+        args=(lead_id, last_user_msg, reply_text, hard_facts_for_memory)
+    ).start()
+
     return ChatResponse(message=reply_text, menu=None)
-

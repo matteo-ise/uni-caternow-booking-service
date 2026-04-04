@@ -1,47 +1,42 @@
-# Claude Code
-CLAUDE.md
+# Consolidated GitIgnore for CaterNow SaaS
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
-venv/
+# Dependencies
+node_modules/
 .venv/
+venv/
 env/
-.env
+__pycache__/
 
-# Environment variables
+# Environment Variables (CRITICAL)
 .env
 .env.*
 **/*.env
 **/*.env.*
 
-# IDEs
+# Build Outputs
+dist/
+build/
+*.egg-info/
+.Python
+*.py[cod]
+*.pyo
+*.pyd
+
+# IDEs & OS
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Embeddings cache (regenerierbar)
+# Project Specific
 backend/embeddings_cache/
 *.pkl
 *.npy
-
-# Excel temp files
 ~$*.xlsx
 ~$*.xls
+.ipynb_checkpoints/
+
+# Logs
+*.log

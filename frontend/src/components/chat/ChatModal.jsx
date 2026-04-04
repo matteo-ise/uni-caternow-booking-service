@@ -1,50 +1,37 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import ProgressTimeline from './ProgressTimeline'
 import Step1Wizard      from './Step1Wizard'
 import ChatPanel        from './ChatPanel'
 import MenuCanvas       from './MenuCanvas'
 import Step4Final       from './Step4Final'
-
-// ── Dummy-Daten ──────────────────────────────────────────────────────────
-const EVENT_REPLIES   = ['Geburtstag', 'Hochzeit', 'Weihnachtsfeier', 'Sommerfest', '…', 'Noch nicht sicher']
-const CUISINE_REPLIES = ['Italienisch', 'Asiatisch', 'Mediterran', 'Deutsch', 'International', 'Ich bin offen']
-const SERVICE_REPLIES = ['Geschirr', 'Kellner', 'Dekoration', 'Nein danke']
-
-const MENU_OPTIONS = {
-  vorspeise:    ['Toskanischer Antipasti-Teller', 'Bruschetta mit Tomaten & Basilikum', 'Kürbiscremesuppe'],
-  hauptspeise1: ['Geflügel mit Oreganokartoffeln & Honigkarotten', 'Gefüllte Paprika mit Rinderhack', 'Auberginenmoussaka'],
-  hauptspeise2: ['Gemüsefrikadellen mit Wildreis', 'Hühnchenfrikadelle mit Zitronensauce', 'Vegetarische Lasagne'],
-  nachspeise:   ['Tiramisu', 'Panna Cotta mit Beerensauce', 'Mousse au Chocolat'],
-}
-
-const WELCOME = 'Hi, ich bin Catersmart Chatty! 🍽️\n\nErzähl mir von deinem Event und wir erstellen zusammen dein perfektes Menü!'
-// ────────────────────────────────────────────────────────────────────────
+import { useAuth }      from '../../context/AuthContext'
 
 export default function ChatModal({ onClose }) {
+  const { currentUser } = useAuth()
   const [step,             setStep]         = useState(1)
   const [wizardData,       setWizardData]   = useState({})
   const [messages,         setMessages]     = useState([])
-  const [chatPhase,        setChatPhase]    = useState('event')   // event | cuisine | open | services | done
   const [quickReplies,     setQuickReplies] = useState([])
   const [inputValue,       setInputValue]   = useState('')
   const [isWaiting,        setIsWaiting]    = useState(false)
   const [menuOptions,      setMenuOptions]  = useState({ vorspeise: [], hauptspeise1: [], hauptspeise2: [], nachspeise: [] })
   const [menu,             setMenu]         = useState({ vorspeise: null, hauptspeise1: null, hauptspeise2: null, nachspeise: null })
   const [selectedServices, setServices]     = useState([])
-  const [servicesConfirmed, setServicesConfirmed] = useState(false)
+
+  // Generate a unique lead ID for this session
+  const leadId = useMemo(() => {
+    const name = currentUser?.displayName?.replace(/\s/g, '') || 'guest'
+    return `${name}-${Date.now()}`
+  }, [currentUser])
 
   // Init chat when entering step 2
   useEffect(() => {
     if (step === 2 && messages.length === 0) {
-      addBotMessage(WELCOME)
-      setTimeout(() => setQuickReplies(EVENT_REPLIES), 600)
+      const welcome = `Hallo ${currentUser?.displayName || 'Feinschmecker'}! Ich bin Chatty. 🥂 Schön, dass du da bist! Erzähl mir mal: Was für ein Event planst du genau?`
+      addBotMessage(welcome)
+      setQuickReplies(['Geburtstag', 'Firmenevent', 'Hochzeit', 'Weihnachtsfeier'])
     }
-    if (step === 3 && chatPhase !== 'services') {
-      setChatPhase('services')
-      addBotMessage('Super Wahl! 🎉\n\nMöchtest du noch Zusatz-Services dazu buchen?')
-      setTimeout(() => setQuickReplies(SERVICE_REPLIES), 400)
-    }
-  }, [step])
+  }, [step, currentUser])
 
   // Close on Escape
   useEffect(() => {
@@ -55,74 +42,47 @@ export default function ChatModal({ onClose }) {
 
   // ── Helpers ────────────────────────────────────────────────────────────
   function addBotMessage(text) {
-    setMessages(prev => [...prev, { role: 'bot', text }])
+    setMessages(prev => [...prev, { role: 'model', content: text }])
   }
 
   function addUserMessage(text) {
-    setMessages(prev => [...prev, { role: 'user', text }])
-  }
-
-  function addLoading() {
-    setMessages(prev => [...prev, { role: 'loading' }])
-  }
-
-  function removeLoading() {
-    setMessages(prev => prev.filter(m => m.role !== 'loading'))
+    setMessages(prev => [...prev, { role: 'user', content: text }])
   }
 
   // ── Chat-Logik ──────────────────────────────────────────────────────────
-  const handleSend = useCallback((text) => {
+  const handleSend = useCallback(async (text) => {
     const trimmed = text.trim()
     if (!trimmed || isWaiting) return
 
     setInputValue('')
     setQuickReplies([])
-    addUserMessage(trimmed)
+    const newMessages = [...messages, { role: 'user', content: trimmed }]
+    setMessages(newMessages)
     setIsWaiting(true)
-    addLoading()
 
-    setTimeout(() => {
-      removeLoading()
-      respondToMessage(trimmed)
-      setIsWaiting(false)
-    }, 900 + Math.random() * 500)
-  }, [chatPhase, isWaiting, wizardData])
-
-  function respondToMessage(text) {
-    if (chatPhase === 'event') {
-      addBotMessage(`${text} – eine tolle Wahl! 🎊\n\nWelche Küche bevorzugst du?`)
-      setQuickReplies(CUISINE_REPLIES)
-      setChatPhase('cuisine')
-
-    } else if (chatPhase === 'cuisine') {
-      addBotMessage(`Perfekt! Ich stelle ein ${text.toLowerCase()} inspiriertes Menü für ${wizardData.persons || '?'} Personen zusammen…`)
-      setChatPhase('building')
-      setTimeout(() => {
-        setMenuOptions(MENU_OPTIONS)
-        addBotMessage('Hier sind meine Vorschläge! 👉\n\nWähle im Menü-Canvas rechts deine Lieblingsgerichte. Schreib mir gerne, wenn du etwas anpassen möchtest.')
-        setChatPhase('open')
-      }, 1400)
-
-    } else if (chatPhase === 'services') {
-      if (text === 'Nein danke') {
-        addBotMessage('Alles klar! Dein Menü ist fertig. Klicke auf „Weiter" um die Zusammenfassung zu sehen.')
-        setServicesConfirmed(true)
-        setQuickReplies([])
+    try {
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation: newMessages,
+          wizardData: wizardData,
+          leadId: leadId
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        addBotMessage(data.message)
       } else {
-        const updated = selectedServices.includes(text)
-          ? selectedServices.filter(s => s !== text)
-          : [...selectedServices, text]
-        setServices(updated)
-        addBotMessage(`Ich habe "${text}" für dich notiert. Möchtest du noch weitere Services?`)
-        setQuickReplies(SERVICE_REPLIES.filter(s => s !== text && s !== 'Nein danke').concat(['Nein danke']))
-        if (updated.length >= SERVICE_REPLIES.length - 1) setServicesConfirmed(true)
+        throw new Error("API Error")
       }
-
-    } else {
-      // Freier Chat in Phase 'open'
-      addBotMessage('Ich habe deine Anmerkung notiert! Wenn du möchtest, passe ich das Menü entsprechend an. 😊')
+    } catch (err) {
+      addBotMessage("Ups, da hat die Verbindung kurz gewackelt. Kannst du das nochmal sagen? 😉")
+    } finally {
+      setIsWaiting(false)
     }
-  }
+  }, [messages, isWaiting, wizardData, leadId])
 
   // ── Handlers ─────────────────────────────────────────────────────────
   function handleMenuSelect(course, dish) {
@@ -131,6 +91,8 @@ export default function ChatModal({ onClose }) {
 
   function handleMenuConfirm() {
     setStep(3)
+    addBotMessage("Hervorragende Wahl! Das sieht nach einem absoluten Festmahl aus. ✨ Möchtest du noch Services wie Geschirr oder Personal dazu buchen?")
+    setQuickReplies(['Geschirr & Besteck', 'Servicepersonal', 'Deko & Blumen', 'Nein, danke'])
   }
 
   function handleWeiter() {
@@ -139,15 +101,10 @@ export default function ChatModal({ onClose }) {
 
   function handleNavigate(targetStep) {
     setStep(targetStep)
-    // Services-Status zurücksetzen wenn man vor Schritt 3 zurückgeht
-    if (targetStep < 3) {
-      setServicesConfirmed(false)
-      setServices([])
-    }
   }
 
   function handleSubmit() {
-    alert('Anfrage gesendet! (Demo-Modus)')
+    alert('Bestellung abgeschickt! Wir melden uns in Kürze bei dir. 🚀')
   }
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -166,7 +123,7 @@ export default function ChatModal({ onClose }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6"  y1="6" x2="18" y2="18"/>
+              <line x1="6"  y1="18" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
@@ -185,7 +142,7 @@ export default function ChatModal({ onClose }) {
               {/* Linke Spalte: Chat */}
               <div className="chat-layout__left">
                 <ChatPanel
-                  messages={messages}
+                  messages={messages.map(m => ({ role: m.role === 'model' ? 'bot' : m.role, text: m.content }))}
                   inputValue={inputValue}
                   onInput={setInputValue}
                   onSend={handleSend}
@@ -205,9 +162,9 @@ export default function ChatModal({ onClose }) {
                   step={step}
                 />
                 {/* Weiter-Button in Step 3 */}
-                {step === 3 && servicesConfirmed && (
+                {step === 3 && (
                   <button className="btn-filled canvas__weiter" onClick={handleWeiter}>
-                    Weiter →
+                    Bestellung prüfen →
                   </button>
                 )}
               </div>

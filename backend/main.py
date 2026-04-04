@@ -10,6 +10,7 @@ from database import init_db, get_db
 from db_models import DBUser
 from embeddings import load_and_embed_dishes
 from chat import router as chat_router
+from admin import router as admin_router
 
 # Firebase Initialisierung (für Token-Validierung)
 try:
@@ -49,6 +50,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 @app.post("/api/users/sync")
 async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -73,4 +75,3 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
