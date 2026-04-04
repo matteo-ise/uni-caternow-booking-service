@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 
 const BUDGET_OPTIONS = [
   { value: 'economy',  label: 'Economy  –  10–30 € / Person' },
@@ -7,6 +8,8 @@ const BUDGET_OPTIONS = [
 ]
 
 export default function Step1Wizard({ onNext, onClose }) {
+  const { currentUser, loginWithGoogle } = useAuth()
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [data, setData] = useState({
     persons:       '',
     date:          '',
@@ -23,9 +26,23 @@ export default function Step1Wizard({ onNext, onClose }) {
     setData(prev => ({ ...prev, [field]: value }))
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (isValid) onNext(data)
+    if (!isValid) return
+
+    if (!currentUser) {
+      setIsLoggingIn(true)
+      try {
+        await loginWithGoogle()
+        onNext(data)
+      } catch (err) {
+        console.error("Login failed, cannot proceed", err)
+      } finally {
+        setIsLoggingIn(false)
+      }
+    } else {
+      onNext(data)
+    }
   }
 
   return (
@@ -151,11 +168,11 @@ export default function Step1Wizard({ onNext, onClose }) {
 
         {/* Buttons */}
         <div className="wizard-actions">
-          <button type="button" className="btn-outlined" onClick={onClose}>
+          <button type="button" className="btn-outlined" onClick={onClose} disabled={isLoggingIn}>
             Zurück
           </button>
-          <button type="submit" className="btn-filled" disabled={!isValid}>
-            Menü selber erstellen →
+          <button type="submit" className="btn-filled" disabled={!isValid || isLoggingIn}>
+            {isLoggingIn ? "Google Login..." : "Menü selber erstellen →"}
           </button>
         </div>
       </form>

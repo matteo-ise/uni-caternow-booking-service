@@ -157,7 +157,7 @@ export default function ChatModal({ onClose }) {
       <div className="modal-backdrop" onClick={onClose} aria-hidden />
 
       {/* Modal */}
-      <div className="modal" role="dialog" aria-modal aria-label="Catersmart Beratung">
+      <div className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} role="dialog" aria-modal aria-label="Catersmart Beratung">
 
         {/* Header: Timeline + Close */}
         <div className="modal__header">

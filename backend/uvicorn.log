@@ -1,0 +1,8 @@
+INFO:     Started server process [36258]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('127.0.0.1', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+[Embeddings] Datenbank ist leer. Starte Vektorisierung der CSV...
+[Embeddings Error] 404 models/text-embedding-004 is not found for API version v1beta, or is not supported for embedContent. Call ListModels to see the list of available models and their supported methods.

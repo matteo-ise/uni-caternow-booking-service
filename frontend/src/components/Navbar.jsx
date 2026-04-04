@@ -1,6 +1,9 @@
 import logo from '../assets/caternow-logo.svg'
+import { useAuth } from '../context/AuthContext'
 
 export default function Navbar() {
+  const { currentUser, loginWithGoogle, logout } = useAuth()
+
   return (
     <nav className="nav">
       <div className="nav-left">
@@ -22,13 +25,28 @@ export default function Navbar() {
 
       <div className="nav-right">
         <button className="pill-btn">DE ▾</button>
-        <button className="icon-btn" title="Profil" aria-label="Profil">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-          </svg>
-        </button>
-        <a href="#" className="link-muted">Login</a>
+        {currentUser ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {currentUser.photoURL ? (
+              <img 
+                src={currentUser.photoURL} 
+                alt="Profile" 
+                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
+                title={currentUser.displayName}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span style={{ fontWeight: 'bold' }}>{currentUser.displayName || currentUser.email}</span>
+            )}
+            <button onClick={logout} className="link-muted" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              Logout
+            </button>
+          </div>
+        ) : (
+          <button onClick={loginWithGoogle} className="link-muted" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
+            Login
+          </button>
+        )}
       </div>
     </nav>
   )

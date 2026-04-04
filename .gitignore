@@ -19,8 +19,10 @@ env/
 .env
 
 # Environment variables
-backend/.env
 .env
+.env.*
+**/*.env
+**/*.env.*
 
 # IDEs
 .vscode/

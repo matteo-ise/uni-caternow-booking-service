@@ -1,3 +1,8 @@
+"""
+Pydantic Models for CaterNow Backend API.
+This file defines the data structures used for request/response validation in FastAPI.
+Update these models if new attributes (like 'vegan', 'allergens') are added to the dishes.
+"""
 from pydantic import BaseModel
 from typing import Literal
 
@@ -7,8 +12,17 @@ class Message(BaseModel):
     content: str
 
 
+class WizardData(BaseModel):
+    customerType: Literal["private", "business"]
+    persons: int | str | None = None
+    date: str | None = None
+    budget: str | None = None
+    companyName: str | None = None
+    companyDomain: str | None = None
+
 class ChatRequest(BaseModel):
     conversation: list[Message]
+    wizardData: WizardData | None = None
 
 
 class Dish(BaseModel):
