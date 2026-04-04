@@ -17,6 +17,24 @@ const BUDGET_OPTIONS = [
 
 const TODAY = new Date().toISOString().split('T')[0]
 
+function Accordion({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="acc">
+      <button
+        type="button"
+        className="acc-head"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span>{title}</span>
+        <span className="acc-icon">{open ? "–" : "+"}</span>
+      </button>
+      {open && <div className="acc-body">{children}</div>}
+    </div>
+  );
+}
+
 export default function Step4Final({ menu, selectedServices, wizardData, onSubmit }) {
   const [editing, setEditing] = useState(false)
   const [local, setLocal]     = useState({ ...wizardData })
@@ -84,45 +102,67 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         )}
       </div>
 
-      <h2 className="final__title">Dein perfektes Menü</h2>
+      <h2 className="final__title" style={{ fontWeight: 800 }}>Zusammenfassung deiner Anfrage</h2>
 
-      {/* ── Menü-Karten ──────────────────────────────────────── */}
-      <div className="final__grid">
-        {COURSE_META.map(course => {
-          const dish = menu[course.key]
-          const displayDish = dish === '__suggest__' ? 'Individuelle Absprache' : (dish || '–')
-          return (
-            <div key={course.key} className="final__card">
-              <img src={course.img} alt={course.label} className="final__card-img" />
-              <div className="final__card-body">
-                <span className="final__card-course">{course.label}</span>
-                <p className="final__card-dish">{displayDish}</p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ── Services ─────────────────────────────────────────── */}
-      {selectedServices.length > 0 && (
-        <div className="final__services">
-          <h3 className="final__services-title">Gebuchte Services</h3>
-          <div className="final__services-list">
-            {selectedServices.map(s => (
-              <span key={s} className="final__service-tag">
-                {SERVICE_ICONS[s] || '✓'} {s}
-              </span>
-            ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '32px' }}>
+        {/* Left Col: Menu */}
+        <div>
+          <h3 style={{ marginBottom: '16px', fontSize: '1.1rem', fontWeight: 700 }}>🍽️ Dein gewähltes Menü</h3>
+          <div className="final__grid" style={{ gridTemplateColumns: '1fr', gap: '16px' }}>
+            {COURSE_META.map(course => {
+              const dish = menu[course.key]
+              const dishName = dish && typeof dish === 'object' ? dish.name : (dish || '–')
+              return (
+                <div key={course.key} style={{ display: 'flex', gap: '16px', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #eef2f6' }}>
+                  <img src={course.img} alt={course.label} style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '8px' }} />
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: '#037A8B', fontWeight: 700, textTransform: 'uppercase' }}>{course.label}</span>
+                    <p style={{ fontWeight: 600, margin: 0 }}>{dishName}</p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
-      )}
+
+        {/* Right Col: Details via Accordion */}
+        <div>
+          <h3 style={{ marginBottom: '16px', fontSize: '1.1rem', fontWeight: 700 }}>📋 Weitere Details</h3>
+          
+          <Accordion title="Services & Add-ons" defaultOpen={true}>
+            {selectedServices.length > 0 ? (
+              <div className="final__services-list">
+                {selectedServices.map(s => (
+                  <span key={s} className="final__service-tag">
+                    {SERVICE_ICONS[s] || '✓'} {s}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p>Keine zusätzlichen Services ausgewählt.</p>
+            )}
+          </Accordion>
+
+          <Accordion title="Firmen-Infos (Research Intelligence)">
+            <p><strong>Firma:</strong> {wizardData.companyName || '–'}</p>
+            <p><strong>Kundentyp:</strong> {wizardData.customerType === 'business' ? 'B2B' : 'B2C'}</p>
+            <p>Unsere KI hat Ihr Profil analysiert, um dieses Angebot zu personalisieren.</p>
+          </Accordion>
+
+          <Accordion title="Zahlung & Logistik">
+            <p>Rechnungsstellung erfolgt nach der Veranstaltung.</p>
+            <p>Lieferung und Aufbau sind im Grundpreis enthalten.</p>
+          </Accordion>
+        </div>
+      </div>
 
       {/* ── Absenden ─────────────────────────────────────────── */}
-      <div className="final__footer">
-        <button className="btn-filled btn-filled--lg" onClick={onSubmit} disabled={editing}>
-          Anfrage absenden →
+      <div className="final__footer" style={{ borderTop: '1px solid #eef2f6', paddingTop: '32px' }}>
+        <button className="btn-filled btn-filled--lg" onClick={onSubmit} disabled={editing} style={{ width: 'auto', padding: '16px 48px' }}>
+          Jetzt unverbindlich anfragen →
         </button>
       </div>
     </div>
   )
 }
+

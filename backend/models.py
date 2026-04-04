@@ -1,10 +1,9 @@
 """
 Pydantic Models for CaterNow Backend API.
-This file defines the data structures used for request/response validation in FastAPI.
-Update these models if new attributes (like 'vegan', 'allergens') are added to the dishes.
+Updated to include similarity scores for vector search transparency.
 """
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, List, Optional
 
 
 class Message(BaseModel):
@@ -14,30 +13,34 @@ class Message(BaseModel):
 
 class WizardData(BaseModel):
     customerType: Literal["private", "business"]
-    persons: int | str | None = None
-    date: str | None = None
-    budget: str | None = None
-    companyName: str | None = None
-    companyDomain: str | None = None
-
-class ChatRequest(BaseModel):
-    conversation: list[Message]
-    wizardData: WizardData | None = None
-    leadId: str | None = None
+    persons: Optional[int | str] = None
+    date: Optional[str] = None
+    budget: Optional[str] = None
+    companyName: Optional[str] = None
+    companyDomain: Optional[str] = None
 
 
 class Dish(BaseModel):
     name: str
     kategorie: Literal["vorspeise", "hauptgericht", "dessert"]
-    preis: float | None = None
+    preis: Optional[float] = None
+    similarity_score: Optional[float] = None # Der mathematische Match-Wert (0 bis 1)
 
 
 class MenuSuggestion(BaseModel):
-    vorspeise: Dish | None = None
-    hauptgericht: Dish | None = None
-    dessert: Dish | None = None
+    vorspeise: Optional[Dish] = None
+    hauptgericht1: Optional[Dish] = None
+    hauptgericht2: Optional[Dish] = None
+    dessert: Optional[Dish] = None
+    alternativen: Optional[List[Dish]] = []
+
+
+class ChatRequest(BaseModel):
+    conversation: List[Message]
+    wizardData: Optional[WizardData] = None
+    leadId: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     message: str
-    menu: MenuSuggestion | None = None
+    menu: Optional[MenuSuggestion] = None
