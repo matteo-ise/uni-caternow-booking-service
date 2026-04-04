@@ -1,3 +1,13 @@
+import os
+import sys
+
+# Environment Check (Crashing early in production if essential vars are missing)
+if not os.environ.get("DATABASE_URL") and not os.path.exists(".env"):
+    print("[CRITICAL] DATABASE_URL is missing. Please set it in your Render Environment Variables.")
+
+if not os.environ.get("GEMINI_API_KEY") and not os.path.exists(".env"):
+    print("[CRITICAL] GEMINI_API_KEY is missing. AI Features will crash.")
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -14,11 +24,12 @@ from orders import router as orders_router
 from auth import get_current_user
 
 # Logger setup
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CaterNow-Main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Datenbank initialisieren
+    # 1. Datenbank initialisieren (CREATE EXTENSION passiert in database.py)
     init_db()
     
     # 2. Intelligenter CSV Sync Check
@@ -41,6 +52,7 @@ async def lifespan(app: FastAPI):
         
         # 3. Gerichte laden & Vektorisieren
         await load_and_embed_dishes(force_refresh=force_sync)
+        logger.info("Application startup complete.") # Render.com Wait-For-Condition
         
     except Exception as e:
         logger.error(f"Lifespan Error: {e}")
@@ -51,9 +63,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CaterNow Chatbot API", lifespan=lifespan)
 
+# CORS: Allow frontend URL from environment variable
+FRONTEND_URL = os.environ.get("VITE_API_URL", "http://localhost:5173").replace("/api", "")
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    FRONTEND_URL,
+    "https://uni-caternow-booking-service.onrender.com" # Explicitly allowing the requested frontend URL
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -81,10 +103,12 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
             db.commit()
         return {"status": "exists", "user_id": user.id}
 
-@app.get("/health")
+@app.get("/api/health")
 async def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "database": "connected",
-        "sync_state": "synchronized"
+        "sync_state": "synchronized",
+        "message": "Application startup complete."
     }
+

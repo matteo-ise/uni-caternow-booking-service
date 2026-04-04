@@ -1,9 +1,11 @@
-export default function ChatButton({ isOpen, onToggle }) {
+export default function ChatButton({ isOpen, onToggle, disabled }) {
   return (
     <button
       className="chat-fab"
       onClick={onToggle}
       aria-label={isOpen ? 'Chat schließen' : 'Chat öffnen'}
+      disabled={disabled}
+      style={{ cursor: disabled ? 'not-allowed' : 'pointer', filter: disabled ? 'grayscale(1)' : 'none' }}
     >
       {/* Grüner Online-Indikator – nur wenn geschlossen */}
       {!isOpen && <span className="chat-fab-badge" aria-hidden />}

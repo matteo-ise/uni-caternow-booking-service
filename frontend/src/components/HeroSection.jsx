@@ -1,6 +1,6 @@
 import heroPlate from '../assets/hero-plate.png'
 
-export default function HeroSection({ onOpenChat }) {
+export default function HeroSection({ onOpenChat, disabled }) {
   return (
     <>
       {/* ── Hero Split ──────────────────────────────────────────── */}
@@ -19,7 +19,7 @@ export default function HeroSection({ onOpenChat }) {
               3-Gang-Menü zusammen – abgestimmt auf deinen Anlass,
               dein Budget und deine Wünsche.
             </p>
-            <button className="hero-cta-btn" onClick={onOpenChat}>
+            <button className="hero-cta-btn" onClick={onOpenChat} disabled={disabled} style={{ opacity: disabled ? 0.6 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
               MENÜ ZUSAMMENSTELLEN
             </button>
           </div>

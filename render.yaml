@@ -1,33 +1,40 @@
 services:
   # Backend: FastAPI
   - type: web
-    name: caternow-backend
+    name: caternow-backend-prod
     env: python
     region: frankfurt # Empfohlen für EU, Render unterstützt 'frankfurt'
-    buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: GEMINI_API_KEY
-        sync: false # Wird in der Render-UI gesetzt
+        sync: false # Wird via Env Group gesetzt
       - key: DATABASE_URL
-        sync: false # Neon DB URL, wird in UI gesetzt
+        sync: false # Wird via Env Group gesetzt
+      - key: ADMIN_SECRET
+        sync: false # Wird via Env Group gesetzt
 
   # Frontend: React / Vite
   - type: web
     name: caternow-frontend
     env: static
     region: frankfurt
-    buildCommand: "cd frontend && npm install && npm run build"
-    staticPublishPath: "./frontend/dist"
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: "./dist"
     envVars:
       - key: NODE_VERSION
         value: 20.x
-      # Firebase Config Keys - werden in der Render-UI gesetzt
+      # Firebase Config Keys - werden in der Render-UI / Env Group gesetzt
       - key: VITE_FIREBASE_API_KEY
         sync: false
       - key: VITE_FIREBASE_AUTH_DOMAIN
         sync: false
       - key: VITE_FIREBASE_PROJECT_ID
         sync: false
+      - key: VITE_API_URL
+        sync: false # e.g. https://caternow-backend-prod.onrender.com
