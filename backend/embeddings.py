@@ -58,6 +58,7 @@ async def load_and_embed_dishes(force_refresh=False):
             kategorie = _get_kategorie(row)
             if kategorie is None: continue
             
+            csv_id = int(row.get("id", 0))
             name = str(row.get("name", "")).strip()
             if not name or name == "nan": continue
             
@@ -65,8 +66,20 @@ async def load_and_embed_dishes(force_refresh=False):
             try: preis = float(row.get("Preis1"))
             except: pass
 
+            # Konstruiere die Firebase Storage URL basierend auf der CSV-ID
+            # WICHTIG: Das Bucket muss in der .env definiert sein
+            bucket = os.environ.get("VITE_FIREBASE_STORAGE_BUCKET")
+            img_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket}/o/dishes%2F{csv_id}.jpg?alt=media"
+
             names_to_embed.append(name)
-            gerichte_to_insert.append(DBDish(name=name, kategorie=kategorie, preis=preis, feedback_context=""))
+            gerichte_to_insert.append(DBDish(
+                csv_id=csv_id, 
+                name=name, 
+                kategorie=kategorie, 
+                preis=preis, 
+                image_url=img_url,
+                feedback_context=""
+            ))
 
         if not names_to_embed:
             logger.warning("Keine gültigen Gerichte in CSV gefunden.")
@@ -125,7 +138,13 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
                 query_obj = query_obj.filter(DBDish.kategorie == kategorie)
             results = query_obj.order_by(DBDish.embedding.cosine_distance(query_vector)).limit(top_k).all()
             
-            mapped = [Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, similarity_score=float(s)) for d, s in results]
+            mapped = [Dish(
+                name=d.name, 
+                kategorie=d.kategorie, 
+                preis=d.preis, 
+                image_url=d.image_url,
+                similarity_score=float(s)
+            ) for d, s in results]
             if mapped:
                 logger.info(f"Vector Search: '{query}' -> Match: '{mapped[0].name}' ({mapped[0].similarity_score:.2f})")
             return mapped

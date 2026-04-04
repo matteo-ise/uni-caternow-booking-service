@@ -96,6 +96,12 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                 </button>
               </div>
 
+              {selected?.image_url && (
+                <div style={{ marginTop: '12px', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
+                  <img src={selected.image_url} alt={selected.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
+
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {hasOptions && !isConfirmed && (
                   <button onClick={() => handlePrev(section.key)} className="nav-btn">‹</button>

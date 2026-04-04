@@ -8,9 +8,11 @@ class DBDish(Base):
     __tablename__ = "dishes"
 
     id = Column(Integer, primary_key=True, index=True)
+    csv_id = Column(Integer, unique=True, index=True, nullable=True)
     name = Column(String, index=True, nullable=False)
     kategorie = Column(String, index=True, nullable=False)
     preis = Column(Float, nullable=True)
+    image_url = Column(String, nullable=True)
     feedback_context = Column(Text, nullable=True, default="")
     
     # Gemini embedding model

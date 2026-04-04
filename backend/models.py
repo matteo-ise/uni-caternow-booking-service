@@ -24,6 +24,7 @@ class Dish(BaseModel):
     name: str
     kategorie: Literal["vorspeise", "hauptgericht", "dessert"]
     preis: Optional[float] = None
+    image_url: Optional[str] = None
     similarity_score: Optional[float] = None # Der mathematische Match-Wert (0 bis 1)
 
 
