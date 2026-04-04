@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { API_URL } from '../../config'
 
 const COURSE_META = [
   { key: 'vorspeise',    label: 'Vorspeise',     fallbackImg: 'https://images.unsplash.com/photo-1626808642875-0aa545482dfb?auto=format&fit=crop&w=480&q=80' },
@@ -93,7 +94,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
   useEffect(() => {
     const fetchStory = async () => {
       try {
-        const resp = await fetch('http://localhost:8000/api/checkout/story', {
+        const resp = await fetch(`${API_URL}/api/checkout/story`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lead_id: leadId })
@@ -360,7 +361,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#037A8B', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           ✨ Deine persönliche Menü-Story
         </h3>
-        <p style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#1e293b', lineHeight: '1.6', margin: 0, maxWidth: '800px', margin: '0 auto' }}>
+        <p style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#1e293b', lineHeight: '1.6', maxWidth: '800px', margin: '0 auto' }}>
           "{story}"
         </p>
       </div>

@@ -20,12 +20,16 @@ services:
 
   # Frontend: React / Vite
   - type: web
-    name: caternow-frontend
+    name: caternow-frontend-prod
     env: static
     region: frankfurt
     rootDir: frontend
     buildCommand: "npm install && npm run build"
     staticPublishPath: "./dist"
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
     envVars:
       - key: NODE_VERSION
         value: 20.x

@@ -7,6 +7,7 @@ import {
     signOut 
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
+import { API_URL } from '../config';
 
 const AuthContext = createContext();
 
@@ -31,7 +32,7 @@ export const AuthProvider = ({ children }) => {
             const result = await signInWithPopup(auth, googleProvider);
             // Nach erfolgreichem Firebase Login, User im Backend anlegen/synchronisieren
             const token = await result.user.getIdToken();
-            await fetch('http://localhost:8000/api/users/sync', {
+            await fetch(`${API_URL}/api/users/sync`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
+import { API_URL } from '../config'
 
 export default function Profile() {
   const { currentUser, logout } = useAuth()
@@ -22,7 +23,7 @@ export default function Profile() {
   const fetchOrders = async () => {
     try {
       const token = await currentUser.getIdToken()
-      const resp = await fetch('http://localhost:8000/api/users/me/orders', {
+      const resp = await fetch(`${API_URL}/api/users/me/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (resp.ok) {
@@ -54,7 +55,7 @@ export default function Profile() {
         dish_id: null
       }
 
-      const resp = await fetch('http://localhost:8000/api/feedback', {
+      const resp = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,

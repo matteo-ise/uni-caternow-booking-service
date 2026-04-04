@@ -1,28 +1,26 @@
 # 🍽️ CaterNow SaaS: The Future of AI-Driven Catering
 
-[![SaaS Architecture](https://img.shields.io/badge/Architecture-Multi--Tenant-blue.svg)](#-architectural-highlights)
-[![AI Model](https://img.shields.io/badge/AI-Gemini%20Flash%202.5-orange.svg)](#-the-brain-chatty)
-[![Database](https://img.shields.io/badge/Vector%20DB-Neon%20(pgvector)-green.svg)](#-vector-excellence)
+[![SaaS Architecture](https://img.shields.io/badge/Architecture-Multi--Tenant-blue.svg)](#-multi-tenant-saas)
+[![AI Model](https://img.shields.io/badge/AI-Gemini%20Flash%20Lite-orange.svg)](#-the-brain-chatty)
+[![Database](https://img.shields.io/badge/Vector%20DB-Neon%20(pgvector)-green.svg)](#-vector-search--rag)
 
-**CaterNow** is not just a booking tool—it’s an intelligent, sales-optimized ecosystem designed to transform how businesses and private customers plan their events. By merging high-end conversational UI with advanced Retrieval-Augmented Generation (RAG) and Research Intelligence, we’ve built an AI agent that sells, learns, and automates like a 100-person startup.
+**CaterNow** is an intelligent, sales-optimized ecosystem designed to transform how businesses and private customers plan their events. By merging a high-end conversational UI with advanced RAG, real-time research intelligence, and a professional caterer dashboard, we’ve built a production-ready SaaS platform.
 
 ---
 
 ## ✨ Executive Summary for Investors
 
-CaterNow represents a paradigm shift in the catering industry. We solve the high-friction "request-quote-negotiate" cycle with a seamless, AI-native experience.
-
 ### 🧠 The Brain: "Chatty"
-Our AI agent isn't just a chatbot; it's a world-class salesperson.
-- **Research Intelligence ("Stalking Engine"):** Automatically analyzes B2B leads via their domain to extract core values, brand colors, and slogans.
-- **Dynamic Persona:** Adjusts tone (Du vs. Sie) and menu complexity based on a calculated **"Fancy Score"**.
-- **Proactive Upselling:** Intelligently suggests complementary dishes (e.g., a vegan second main course) to maximize order value.
+Our AI agent is a world-class salesperson.
+- **Research Intelligence:** Automatically analyzes B2B leads via their domain to extract values and headquarters addresses.
+- **Explainable AI (XAI):** Displays a mathematical "AI Match %" for every recommendation to build user trust.
+- **Proactive Upselling:** Intelligently suggests second main courses and add-ons to maximize AOV (Average Order Value).
 
-### 📊 The Caterer Studio (God Mode)
-A professional SaaS command center for caterers.
-- **Live Lead Tracking:** Watch AI session memory build in real-time.
-- **Continuous Learning Loop:** The system learns from customer feedback (e.g., "too much meat") by re-vectorizing dishes based on sentiment.
-- **Analytics Dashboard:** Revenue, lead pipeline, and system health monitors at a glance.
+### 📊 The Caterer Studio (Admin 2.0)
+A professional command center for caterers.
+- **Continuous Learning:** The AI learns from customer feedback. When a user rates a dish, the system re-vectorizes it based on the review.
+- **Live Lead Memory:** Watch lead profiles and preferences build in real-time as they chat.
+- **System Health:** Integrated monitors for Gemini API, Firebase, and Database status.
 
 ---
 
@@ -30,62 +28,46 @@ A professional SaaS command center for caterers.
 
 | Feature | Technology | Why it's a winner |
 | :--- | :--- | :--- |
-| **Vector Search** | `pgvector` on Neon PostgreSQL | Mathematically precise matches based on 3072-dim embeddings. |
-| **Rich RAG** | Gemini Embedding-001 | We vectorize dishes using *all* attributes (halal, vegan, vibes) for 99% accuracy. |
-| **Multi-Tenant** | Scalable Schema | Pre-built for 1000s of caterers with custom domains and isolated data. |
-| **Streaming** | FastAPI + Server-Sent Events | Zero-latency feeling; tokens appear live as the AI "thinks". |
+| **Vector Search** | `pgvector` on Neon | 3072-dim embeddings for mathematically precise dish matching. |
+| **Incremental Sync** | Batch Processing | Smart seeding that handles API quotas and resumes after restarts. |
+| **Multi-Tenant** | Scalable Schema | Pre-built for 1000s of caterers with isolated data environments. |
+| **Apple CI Design** | Modern UI/UX | Clean onboarding cards, Bento Grids, and smooth transitions. |
 
 ---
 
 ## 🚀 Quickstart for Developers
 
-Get the entire ecosystem running locally in less than 5 minutes.
+### 1. Requirements
+- Python 3.11.9
+- Node.js 20.x
+- Firebase Account + Neon.tech DB
 
-### 1. Global Setup
-Clone the repo and create a `.env` in the root (use `.env.example` as a template):
-```env
-VITE_FIREBASE_API_KEY="your_key"
-GEMINI_API_KEY="your_key"
-DATABASE_URL="postgresql://..."
-```
-
-### 2. Launch Backend (Python)
+### 2. Launch Backend
 ```bash
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
-*Note: The backend automatically synchronizes your CSV menu with the Vector DB using an intelligent MD5-hashing logic.*
+*The backend includes an automatic CSV-to-Vector sync with MD5 change detection.*
 
-### 3. Launch Frontend (React)
+### 3. Launch Frontend
 ```bash
 cd frontend
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
 ---
 
 ## 🔍 The "Informatics Check" (Demo)
-
-Want to see the math? We’ve included a precision testing tool to prove our vector logic isn't hallucinating.
+Prove the mathematical accuracy of the AI with our precision tool:
 ```bash
 python3 demo_vector_precision.py
 ```
-This will output a table of **Cosine Similarity Scores** comparing user intent to our actual database entries.
 
 ---
 
-## 🐣 Holiday Special
-Launch during the season? We've integrated a festive **Easter Success Screen** with animated eggs and confetti to delight users after their first order.
-
----
-
-## 📅 Roadmap: From Prototype to Enterprise
-- [x] **Sprint 1-4:** Core AI & Memory Infrastructure.
-- [x] **Sprint 5:** Bento UI & Interactive Alternative Selection.
-- [x] **Sprint 6:** Continuous Feedback Loop & Multi-Tenant Base.
-- [ ] **Next:** Stripe Payment Integration & Custom Domain Auto-Provisioning.
+## 🏢 Multi-Tenant Vision
+CaterNow is architected for scale. Every order and dish is linked to a `tenant_id`, enabling white-label deployments for various catering companies on their own subdomains.
 
 ---
 **CaterNow** – *Catering. Simplified. Powered by Intelligence.*

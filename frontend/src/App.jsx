@@ -7,8 +7,7 @@ import ChatModal   from './components/chat/ChatModal'
 import Admin       from './pages/Admin'
 import Profile     from './pages/Profile'
 import { useAuth } from './context/AuthContext'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_URL } from './config'
 
 function Home() {
   const [chatOpen, setChatOpen] = useState(false)

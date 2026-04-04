@@ -5,6 +5,7 @@ import ChatPanel        from './ChatPanel'
 import MenuCanvas       from './MenuCanvas'
 import Step4Final       from './Step4Final'
 import { useAuth }      from '../../context/AuthContext'
+import { API_URL }      from '../../config'
 
 export default function ChatModal({ onClose }) {
   const { currentUser } = useAuth()
@@ -63,7 +64,7 @@ export default function ChatModal({ onClose }) {
     setMessages(prev => [...prev, { role: 'loading', content: '' }])
 
     try {
-      const response = await fetch('http://localhost:8000/api/chat', {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation: updatedMessages, wizardData: wizardData, leadId: leadId })
@@ -158,7 +159,7 @@ export default function ChatModal({ onClose }) {
         }
       }
 
-      const resp = await fetch('http://localhost:8000/api/orders', {
+      const resp = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,

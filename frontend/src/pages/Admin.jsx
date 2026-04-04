@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_URL } from '../config'
 
 export default function Admin() {
   const [password, setPassword] = useState('')
@@ -52,28 +53,28 @@ export default function Admin() {
 
   const fetchLeads = async () => {
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/leads', { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/leads`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) setLeads(await resp.json())
     } catch (err) { console.error(err) }
   }
 
   const fetchOrders = async () => {
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/orders', { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/orders`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) setOrders(await resp.json())
     } catch (err) { console.error(err) }
   }
 
   const fetchFeedbacks = async () => {
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/feedbacks', { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/feedbacks`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) setFeedbacks(await resp.json())
     } catch (err) { console.error(err) }
   }
 
   const fetchDishes = async () => {
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/dishes', { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/dishes`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) setDishes(await resp.json())
     } catch (err) { console.error(err) }
   }
@@ -82,7 +83,7 @@ export default function Admin() {
     setSelectedLead(leadId)
     setMemoryContent('Lade Memory...')
     try {
-      const resp = await fetch(`http://localhost:8000/api/admin/memory/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/memory/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) {
         const data = await resp.json()
         setMemoryContent(data.content)
@@ -97,7 +98,7 @@ export default function Admin() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const resp = await fetch('http://localhost:8000/api/admin/upload-csv', {
+      const resp = await fetch(`${API_URL}/api/admin/upload-csv`, {
         method: 'POST',
         headers: { 'X-Admin-Token': getAdminToken() },
         body: formData
