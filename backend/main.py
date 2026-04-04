@@ -69,7 +69,8 @@ origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     FRONTEND_URL,
-    "https://uni-caternow-booking-service.onrender.com" # Explicitly allowing the requested frontend URL
+    "https://uni-caternow-booking-service.onrender.com",
+    "https://caternow-frontend-prod.onrender.com" # Explicitly allowing the requested frontend URL
 ]
 
 app.add_middleware(
