@@ -14,6 +14,8 @@ export default function ChatModal({ onClose }) {
   const [quickReplies,     setQuickReplies] = useState([])
   const [inputValue,       setInputValue]   = useState('')
   const [isWaiting,        setIsWaiting]    = useState(false)
+  const [isEventSelection, setIsEventSelection] = useState(false)
+  const [hasSelectedEvent, setHasSelectedEvent] = useState(false)
   const [menuOptions,      setMenuOptions]  = useState({ vorspeise: [], hauptspeise1: [], hauptspeise2: [], nachspeise: [] })
   const [menu,             setMenu]         = useState({ vorspeise: null, hauptspeise1: null, hauptspeise2: null, nachspeise: null })
   const [selectedServices, setServices]     = useState([])
@@ -25,9 +27,10 @@ export default function ChatModal({ onClose }) {
 
   useEffect(() => {
     if (step === 2 && messages.length === 0) {
-      const welcome = `Hallo ${currentUser?.displayName || 'Feinschmecker'}! Ich bin Chatty. 🥂 Schön, dass du da bist! Erzähl mir mal: Was für ein Event planst du genau?`
+      const name = currentUser?.displayName ? currentUser.displayName.split(' ')[0] : 'Gast'
+      const welcome = `Guten Tag, ${name}. Schön, dass Sie die Planung in unsere Hände legen. Damit ich Ihnen eine erste Auswahl zusammenstellen kann: Welchen Anlass dürfen wir kulinarisch begleiten?`
       addBotMessage(welcome)
-      setQuickReplies(['Geburtstag', 'Firmenevent', 'Hochzeit', 'Weihnachtsfeier'])
+      setIsEventSelection(true)
     }
   }, [step, currentUser])
 
@@ -39,6 +42,12 @@ export default function ChatModal({ onClose }) {
 
   function addBotMessage(text) {
     setMessages(prev => [...prev, { role: 'model', content: text }])
+  }
+
+  const handleEventSelect = (eventName) => {
+    setIsEventSelection(false)
+    setHasSelectedEvent(true)
+    handleSend(eventName)
   }
 
   const handleSend = useCallback(async (text) => {
@@ -191,6 +200,7 @@ export default function ChatModal({ onClose }) {
                 <ChatPanel
                   messages={messages.map(m => ({ role: m.role === 'model' ? 'bot' : m.role, text: m.content }))}
                   inputValue={inputValue} onInput={setInputValue} onSend={handleSend} onQuickReply={handleSend} quickReplies={quickReplies} isWaiting={isWaiting}
+                  isEventSelection={isEventSelection} onEventSelect={handleEventSelect} isGlow={hasSelectedEvent && !isWaiting}
                 />
               </div>
               <div className="chat-layout__right">

@@ -110,7 +110,7 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                 <div style={{ flex: 1 }}>
                   {selected ? (
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontWeight: 700, fontSize: '1rem' }}>{selected.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{selected.name}</div>
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                         <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{selected.preis?.toFixed(2)} €</div>
                         {selected.similarity_score && (
@@ -123,13 +123,16 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                             fontWeight: 700,
                             border: '1px solid #bbf7d0'
                           }}>
-                            {(selected.similarity_score * 100).toFixed(0)}% AI Match
+                            {(selected.similarity_score * 100).toFixed(0)}% Match
                           </div>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center' }}>KI wählt aus...</div>
+                    <div style={{ textAlign: 'center', padding: '10px' }}>
+                      <div className="pulse-placeholder" style={{ height: '14px', width: '60%', background: '#f1f5f9', borderRadius: '4px', margin: '0 auto 8px' }}></div>
+                      <div style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.02em' }}>ANALYSE LÄUFT...</div>
+                    </div>
                   )}
                 </div>
 
