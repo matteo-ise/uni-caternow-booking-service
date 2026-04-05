@@ -43,6 +43,7 @@ function Accordion({ title, children, defaultOpen = false }) {
 export default function Step4Final({ menu, selectedServices, wizardData, onSubmit, userEmail, userName, leadId }) {
   const [editing, setEditing] = useState(false)
   const [local, setLocal]     = useState({ ...wizardData })
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Delivery Setup State
   const [withSetup, setWithSetup] = useState(true)
@@ -103,6 +104,12 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         if (resp.ok) {
           const data = await resp.json()
           setStory(data.story)
+          if (data.hq_address && address === '' || address.includes('Musterstraße 1')) {
+            setAddress(data.hq_address)
+          }
+          if (data.logo_url) {
+            setLocal(prev => ({ ...prev, companyLogo: data.logo_url }))
+          }
         }
       } catch (err) {
         setStory('Dein perfektes Menü ist bereit. Wir freuen uns auf dein Event!')
@@ -123,9 +130,12 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
     ? new Date(display.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
     : '–'
   
-  const canSubmit = email.trim() !== '' && address.trim() !== '' && name.trim() !== '' && !editing
+  const canSubmit = email.trim() !== '' && address.trim() !== '' && name.trim() !== '' && !editing && !isSubmitting
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
     const finalData = {
       ...display,
       name,
@@ -135,7 +145,15 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       totalPrice: priceStats.total,
       deliveryWithSetup: withSetup
     }
-    onSubmit(finalData)
+    
+    try {
+      await onSubmit(finalData)
+    } catch (err) {
+      console.error(err)
+      // Wir setzen isSubmitting nur zurück wenn es fehlgeschlagen ist, 
+      // damit der User es nochmal probieren kann.
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -154,17 +172,6 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
                 className="final__edit-input"
               />
             </label>
-            <label className="final__edit-field">
-              <span>👥</span>
-              <input
-                type="number"
-                min="1"
-                value={local.persons}
-                onChange={e => set('persons', e.target.value)}
-                className="final__edit-input final__edit-input--sm"
-                placeholder="Personen"
-              />
-            </label>
             <button className="final__edit-save" onClick={() => setEditing(false)}>
               ✓ Speichern
             </button>
@@ -172,8 +179,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         ) : (
           <>
             <span>📅 {dateFormatted}</span>
-            <span>👥 {display.persons} Personen</span>
-            <button className="final__edit-btn" onClick={() => setEditing(true)} title="Angaben bearbeiten">
+            <button className="final__edit-btn" onClick={() => setEditing(true)} title="Datum bearbeiten">
               ✏️ Ändern
             </button>
           </>
@@ -365,33 +371,47 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
 
       {/* ── Story at the bottom ──────────────────────────── */}
       <div style={{ marginTop: '40px', background: '#f0fdfa', padding: '32px', borderRadius: '24px', border: '1px solid #037A8B', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        {local.companyLogo && (
+          <img src={local.companyLogo} alt="Firmenlogo" style={{ height: '40px', marginBottom: '16px', objectFit: 'contain' }} />
+        )}
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#037A8B', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           ✨ Deine persönliche Menü-Story
         </h3>
         <p style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#1e293b', lineHeight: '1.6', maxWidth: '800px', margin: '0 auto' }}>
           "{story}"
         </p>
-        
-        {/* Easter Egg / Osterei */}
-        <div className="easter-egg-container" style={{ marginTop: '24px' }}>
-          <div className="pulsing-egg" style={{ fontSize: '2.5rem', cursor: 'pointer', display: 'inline-block' }} title="Ein kleines Extra für dich!">
-            🥚✨
-          </div>
-          <p style={{ fontSize: '0.75rem', color: '#037A8B', fontWeight: 700, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Oster-Special entdeckt!
-          </p>
-        </div>
-
-        <style jsx>{`
-          .pulsing-egg {
-            animation: egg-float 3s infinite ease-in-out;
-          }
-          @keyframes egg-float {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-10px) rotate(5deg); }
-          }
-        `}</style>
       </div>
+
+      {/* Easter Egg / Osterei - Outside the box */}
+      <div className="easter-egg-container" style={{ marginTop: '40px', textAlign: 'center' }}>
+        <div className="pulsing-egg" style={{ fontSize: '4rem', cursor: 'pointer', display: 'inline-block' }} title="Happy Easter!">
+          🥚✨
+        </div>
+        <p style={{ fontSize: '1.2rem', color: '#037A8B', fontWeight: 800, marginTop: '12px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+          Happy Easter
+        </p>
+      </div>
+
+      <style jsx>{`
+        .loading-spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .pulsing-egg {
+          animation: egg-float 3s infinite ease-in-out;
+        }
+        @keyframes egg-float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-15px) rotate(8deg); }
+        }
+      `}</style>
 
       {/* ── Absenden ─────────────────────────────────────────── */}
       <div className="final__footer" style={{ borderTop: '1px solid #eef2f6', paddingTop: '32px', marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -400,9 +420,22 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
           className={`btn-filled btn-filled--lg ${!canSubmit ? 'btn-disabled' : ''}`} 
           onClick={handleFinalSubmit} 
           disabled={!canSubmit} 
-          style={{ width: 'auto', padding: '16px 48px', opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
+          style={{ 
+            width: 'auto', 
+            padding: '16px 48px', 
+            opacity: canSubmit ? 1 : 0.5, 
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
+            minWidth: '280px'
+          }}
         >
-          Jetzt verbindlich anfragen für {priceStats.total.toFixed(2)} € →
+          {isSubmitting ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+              <span className="loading-spinner"></span>
+              Anfrage wird gesendet...
+            </span>
+          ) : (
+            `Jetzt verbindlich anfragen für ${priceStats.total.toFixed(2)} € →`
+          )}
         </button>
       </div>
     </div>

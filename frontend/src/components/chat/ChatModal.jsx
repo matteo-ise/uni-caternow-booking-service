@@ -57,16 +57,22 @@ export default function ChatModal({ isOpen, onClose }) {
     const trimmed = text.trim()
     if (!trimmed || isWaiting) return
 
-    setInputValue('')
-    setQuickReplies([])
-
-    // Tracking für zusätzliche Leistungen in Schritt 3
-    if (step === 3 && trimmed !== 'Nein, danke' && trimmed !== 'Bestellung prüfen →') {
+    // Multi-Select für Leistungen in Schritt 3
+    if (step === 3 && quickReplies.includes(trimmed)) {
+      if (trimmed === 'Nein, danke') {
+        handleWeiter()
+        return
+      }
       setServices(prev => {
-        if (prev.includes(trimmed)) return prev
+        if (prev.includes(trimmed)) return prev.filter(s => s !== trimmed)
         return [...prev, trimmed]
       })
+      // Keine Nachricht an KI senden, nur UI updaten
+      return
     }
+
+    setInputValue('')
+    setQuickReplies([])
 
     const userMsg = { role: 'user', content: trimmed }
     const updatedMessages = [...messages, userMsg]
@@ -85,7 +91,7 @@ export default function ChatModal({ isOpen, onClose }) {
           context_services: selectedServices 
         })
       })
-      
+
       if (!response.ok) throw new Error("API Error")
 
       const reader = response.body.getReader()
@@ -99,31 +105,32 @@ export default function ChatModal({ isOpen, onClose }) {
         const chunk = decoder.decode(value, { stream: true })
         fullText += chunk
         if (isFirstChunk && chunk.trim()) isFirstChunk = false
+
+        // Multi-Message Split beim Streamen
+        const parts = fullText.split('|||').map(p => p.trim()).filter(Boolean)
         setMessages(prev => {
-          const newMsgs = [...prev]
-          newMsgs[newMsgs.length - 1] = { role: isFirstChunk ? 'loading' : 'model', content: fullText }
-          return newMsgs
+          const baseMsgs = [...updatedMessages]
+          parts.forEach((p, idx) => {
+             baseMsgs.push({ role: 'model', content: p })
+          })
+          if (isFirstChunk) {
+             baseMsgs.push({ role: 'loading', content: '' })
+          }
+          return baseMsgs
         })
       }
 
-      // Once finished, extract JSON if present
       let cleanText = fullText
-      
-      // We check for VERIFIED_JSON first (the ground truth from our Python layer)
+
       const verifiedMatch = fullText.match(/\[VERIFIED_JSON\](.*?)\[\/VERIFIED_JSON\]/s)
       const aiMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
-      
+
       if (verifiedMatch) {
         try {
           const verifiedData = JSON.parse(verifiedMatch[1].trim())
-          setMenu(prev => ({
-            ...prev,
-            ...verifiedData
-          }))
-          // Update options as well if possible, or just keep verified choice
+          setMenu(prev => ({ ...prev, ...verifiedData }))
         } catch (e) { console.error("Verified JSON Error", e) }
       } else if (aiMatch) {
-        // Fallback to AI JSON if no verification happened
         try {
           const data = JSON.parse(aiMatch[1].trim())
           const newOptions = {
@@ -142,26 +149,29 @@ export default function ChatModal({ isOpen, onClose }) {
         } catch (e) { console.error("AI JSON Error", e) }
       }
 
-      // Cleanup visible text from all JSON markers
       cleanText = fullText
         .replace(/\[VERIFIED_JSON\].*?\[\/VERIFIED_JSON\]/gs, '')
         .replace(/\[MENU_JSON\].*?\[\/MENU_JSON\]/gs, '')
         .trim()
 
+      const finalParts = cleanText.split('|||').map(p => p.trim()).filter(Boolean)
       setMessages(prev => {
-        const newMsgs = [...prev]
-        newMsgs[newMsgs.length - 1] = { role: 'model', content: cleanText }
-        return newMsgs
+        const baseMsgs = [...updatedMessages]
+        finalParts.forEach(p => {
+           baseMsgs.push({ role: 'model', content: p })
+        })
+        return baseMsgs
       })
     } catch (err) {
       setMessages(prev => {
         const newMsgs = [...prev]
-        newMsgs[newMsgs.length - 1] = { role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" }
+        // remove loading
+        newMsgs.pop()
+        newMsgs.push({ role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" })
         return newMsgs
       })
     } finally { setIsWaiting(false) }
-  }, [messages, isWaiting, wizardData, leadId, selectedServices])
-
+  }, [messages, isWaiting, wizardData, leadId, selectedServices, quickReplies])
   function handleMenuSelect(course, dish) {
     if (course === 'TRIGGER_UPSELL') {
       handleSend("Hauptspeise 1 gefällt mir sehr gut! Was würdest du als zweite Hauptspeise dazu empfehlen, damit für jeden Gast etwas dabei ist?")
@@ -247,6 +257,8 @@ export default function ChatModal({ isOpen, onClose }) {
                   inputValue={inputValue} onInput={setInputValue} onSend={handleSend} onQuickReply={handleSend} quickReplies={quickReplies} isWaiting={isWaiting}
                   isEventSelection={isEventSelection} onEventSelect={handleEventSelect} isGlow={hasSelectedEvent && !isWaiting}
                   customerType={wizardData.customerType}
+                  selectedServices={selectedServices}
+                  step={step}
                 />
               </div>
               <div className="chat-layout__right">
