@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 
 from database import SessionLocal, get_db
 from db_models import DBDish, DBUser
-from models import Message, WizardData
-from research import run_company_research, check_and_inc_usage
-from memory import get_memory, update_memory_async
+from models import Message, WizardData, ChatRequest
+from research import run_company_research
+from memory import get_memory, update_memory_async, save_research_sidecar
 from embeddings import find_similar_dishes
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -52,42 +52,44 @@ def _get_official_dish(suggested_name: str, db: Session) -> Optional[DBDish]:
     return db.query(DBDish).filter(DBDish.name.ilike(suggested_name.strip())).first()
 
 @router.post("/chat")
-async def chat(
-    conversation: List[Message], 
-    wizardData: Optional[WizardData] = None, 
-    leadId: str = "unknown",
-    context_services: List[str] = []
-):
+async def chat(req: ChatRequest):
+    conversation = req.conversation
+    wizardData = req.wizardData
+    leadId = req.leadId or "unknown"
+    context_services = req.context_services or []
+
     # 1. RAG: Ähnliche Gerichte finden basierend auf letzter Nachricht
     last_user_msg = conversation[-1].content
     similar_dishes = find_similar_dishes(last_user_msg, top_k=8)
     dishes_context = "VERFÜGBARE ECHTE GERICHTE (NUR DIESE NUTZEN):\n" + "\n".join([f"- {d.name} ({d.kategorie})" for d in similar_dishes])
-    
+
     # 2. Memory & Research
     memory_context = get_memory(leadId) or ""
     system_prompt = BASE_SYSTEM_PROMPT + "\n\n**LEAD MEMORY:**\n" + memory_context
-    
+
     hard_facts = wizardData.model_dump() if wizardData else {}
-    
+
     if wizardData and wizardData.customerType == "business":
         research = run_company_research(wizardData.companyName)
         hard_facts.update(research.model_dump())
         system_prompt += f"\n**RESEARCH DATA:** {research.company_name}, Score: {research.fancy_score}/100, HQ Adresse: {research.hq_address}, Logo: {research.logo_url}"
+        # Persist research data so the checkout story endpoint can read it reliably
+        save_research_sidecar(leadId, {
+            "hq_address": research.hq_address,
+            "logo_url": research.logo_url,
+            "company_name": research.company_name,
+            "fancy_score": research.fancy_score,
+        })
 
     async def stream_generator():
         nonlocal system_prompt
         full_reply = ""
         try:
-            # Tageslimit für Search Grounding prüfen
-            can_search = check_and_inc_usage("google_search", limit=500)
-            search_tools = [{"google_search_retrieval": {}}] if can_search else []
-
             try:
-                # Versuch 1: Mit Search Grounding (nur wenn unter Limit)
+                # Versuch 1: Ohne Search Grounding (Chat-Modell braucht kein Grounding)
                 model = genai.GenerativeModel(
-                    model_name=GEMINI_MODEL, 
+                    model_name=GEMINI_MODEL,
                     system_instruction=system_prompt + "\n\n" + dishes_context,
-                    tools=search_tools
                 )
                 history = [{"role": m.role, "parts": [m.content]} for m in conversation[:-1]]
                 chat_session = model.start_chat(history=history)

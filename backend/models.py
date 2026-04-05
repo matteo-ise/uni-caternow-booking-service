@@ -39,6 +39,7 @@ class ChatRequest(BaseModel):
     conversation: List[Message]
     wizardData: Optional[WizardData] = None
     leadId: Optional[str] = None
+    context_services: Optional[List[str]] = []
 
 
 class ChatResponse(BaseModel):

@@ -4,6 +4,15 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import { API_URL } from '../config'
 
+const skeletonStyle = (width, height, borderRadius = 6) => ({
+  width: typeof width === 'number' ? `${width}px` : width,
+  height: `${height}px`,
+  borderRadius: `${borderRadius}px`,
+  background: 'linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)',
+  backgroundSize: '800px 100%',
+  animation: 'shimmer 1.5s infinite linear',
+})
+
 export default function Profile() {
   const { currentUser, logout } = useAuth()
   const navigate = useNavigate()
@@ -36,47 +45,47 @@ export default function Profile() {
     }
   }
 
-  const handleFeedbackSubmit = async (orderId, isGeneral = true, dishId = null) => {
-    const fb = feedbackState[orderId]
-    if (!fb || !fb.comment) return alert('Bitte einen Kommentar eingeben.')
+  const handleFeedbackSubmit = async (orderId, menu) => {
+    const fb = feedbackState[orderId] || {}
+    if (!fb.comment?.trim()) {
+      setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], error: 'Bitte einen Kommentar eingeben.' } }))
+      return
+    }
+
+    const target = fb.target || 'general'
+    const isGeneral = target === 'general'
+    let dishId = null
+    if (!isGeneral) {
+      const dishObj = Object.values(menu).find(d => d && (d.id || d.name || d) === target)
+      dishId = dishObj?.csv_id || null
+    }
+
+    setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: true, error: null } }))
 
     try {
       const token = await currentUser.getIdToken()
-      
-      const payload = {
-        order_id: orderId,
-        rating: fb.rating || 5,
-        comment: fb.comment,
-        is_general: isGeneral,
-        dish_id: dishId ? parseInt(dishId) : null
-      }
-
       const resp = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify(payload)
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, rating: fb.rating || 5, comment: fb.comment, is_general: isGeneral, dish_id: dishId ? parseInt(dishId) : null })
       })
-
       if (resp.ok) {
-        alert('Danke! Dein Feedback hilft unserer KI, noch besser zu werden.')
-        setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], comment: '', target: 'general' } }))
+        setFeedbackState(prev => ({ ...prev, [orderId]: { rating: 5, comment: '', target: 'general', success: true } }))
+        setTimeout(() => setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], success: false } })), 3500)
+      } else {
+        setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: false, error: 'Fehler beim Senden. Bitte nochmal versuchen.' } }))
       }
     } catch (err) {
-      console.error(err)
+      setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: false, error: 'Netzwerkfehler.' } }))
     }
   }
 
   const updateFeedback = (orderId, field, value) => {
     setFeedbackState(prev => ({
       ...prev,
-      [orderId]: { ...(prev[orderId] || {}), [field]: value }
+      [orderId]: { ...(prev[orderId] || {}), [field]: value, error: null }
     }))
   }
-
-  if (loading) return <div>Lade Profil...</div>
 
   return (
     <>
@@ -87,7 +96,31 @@ export default function Profile() {
 
         <h2 style={{ fontSize: '1.5rem', fontWeight: 700, borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '24px' }}>Meine Bestellungen</h2>
 
-        {orders.length === 0 ? (
+        {loading ? (
+          <div style={{ display: 'grid', gap: '24px' }}>
+            {[1, 2].map(n => (
+              <div key={n} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={skeletonStyle(120, 18)} />
+                  <div style={skeletonStyle(80, 16)} />
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                  <div style={skeletonStyle(100, 32, 8)} />
+                  <div style={skeletonStyle(120, 32, 8)} />
+                  <div style={skeletonStyle(90, 32, 8)} />
+                </div>
+                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px' }}>
+                  <div style={skeletonStyle(140, 16, 4)} />
+                  <div style={{ ...skeletonStyle('100%', 40, 8), marginTop: '16px' }} />
+                </div>
+              </div>
+            ))}
+            <style>{`
+              @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            `}</style>
+          </div>
+        ) : orders.length === 0 ? (
           <div style={{ background: '#f8fafc', padding: '40px', textAlign: 'center', borderRadius: '16px', color: '#64748b' }}>
             Du hast noch keine Caterings bei uns gebucht.
           </div>
@@ -111,73 +144,93 @@ export default function Profile() {
                   </div>
 
                   {/* Feedback Section */}
-                  <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontWeight: 700, marginBottom: '4px', fontSize: '1rem' }}>🌟 Feedback geben</div>
-                    <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '16px' }}>Wähle ein Gericht oder gib allgemeines Feedback zu dieser Bestellung.</p>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Feedback für:</label>
-                          <select 
-                            value={feedbackState[order.id]?.target || 'general'} 
-                            onChange={e => updateFeedback(order.id, 'target', e.target.value)}
-                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 600 }}
-                          >
-                            <option value="general">🏠 Allgemein (Caterer)</option>
-                            <optgroup label="Gerichte dieser Bestellung">
-                              {Object.entries(menu).map(([key, dish]) => dish && (
-                                <option key={key} value={dish.id || dish.name || dish}>
-                                  🍽️ {dish.name || dish}
-                                </option>
-                              ))}
-                            </optgroup>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Bewertung:</label>
-                          <select 
-                            value={feedbackState[order.id]?.rating || 5} 
-                            onChange={e => updateFeedback(order.id, 'rating', parseInt(e.target.value))}
-                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                          >
-                            <option value="5">⭐⭐⭐⭐⭐ Perfekt</option>
-                            <option value="4">⭐⭐⭐⭐ Sehr gut</option>
-                            <option value="3">⭐⭐⭐ Okay</option>
-                            <option value="2">⭐⭐ Nicht so gut</option>
-                            <option value="1">⭐ Schlecht</option>
-                          </select>
-                        </div>
-                      </div>
+                  {(() => {
+                    const fb = feedbackState[order.id] || {}
+                    const isSubmitting = fb.submitting
+                    const rating = fb.rating || 5
+                    return (
+                      <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '14px' }}>🌟 Feedback geben</div>
 
-                      <div style={{ display: 'flex', gap: '12px' }}>
-                        <input 
-                          type="text" 
-                          placeholder={feedbackState[order.id]?.target === 'general' ? "Was hat dir besonders gefallen?" : "Wie hat es geschmeckt?"} 
-                          value={feedbackState[order.id]?.comment || ''}
-                          onChange={e => updateFeedback(order.id, 'comment', e.target.value)}
-                          style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                        />
-                        <button 
-                          onClick={() => {
-                            const target = feedbackState[order.id]?.target || 'general';
-                            const isGeneral = target === 'general';
-                            // Wir finden die dish_id falls möglich
-                            let dishId = null;
-                            if (!isGeneral) {
-                              const dishObj = Object.values(menu).find(d => (d.id || d.name || d) === target);
-                              dishId = dishObj?.csv_id || null;
-                            }
-                            
-                            handleFeedbackSubmit(order.id, isGeneral, dishId);
-                          }}
-                          style={{ background: '#037A8B', color: '#fff', border: 'none', padding: '0 24px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
-                        >
-                          Senden
-                        </button>
+                        {fb.success ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '10px', padding: '16px' }}>
+                            <span style={{ fontSize: '1.5rem' }}>✅</span>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#166534' }}>Danke für dein Feedback!</div>
+                              <div style={{ fontSize: '0.82rem', color: '#16a34a' }}>Deine Bewertung hilft unserer KI, noch besser zu werden.</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            {/* Target selector */}
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Feedback für</label>
+                              <select
+                                value={fb.target || 'general'}
+                                onChange={e => updateFeedback(order.id, 'target', e.target.value)}
+                                disabled={isSubmitting}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, background: '#fff', fontFamily: 'Montserrat, sans-serif' }}
+                              >
+                                <option value="general">🏠 Allgemein (Caterer)</option>
+                                {Object.entries(menu).map(([key, dish]) => dish && (
+                                  <option key={key} value={dish.id || dish.name || dish}>🍽️ {dish.name || dish}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Star rating */}
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Bewertung</label>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                {[1,2,3,4,5].map(star => (
+                                  <button
+                                    key={star}
+                                    onClick={() => updateFeedback(order.id, 'rating', star)}
+                                    disabled={isSubmitting}
+                                    style={{ background: 'none', border: 'none', fontSize: '1.6rem', cursor: 'pointer', padding: '0 2px', color: star <= rating ? '#f59e0b' : '#e2e8f0', transition: 'color 0.15s, transform 0.1s', transform: star <= rating ? 'scale(1.1)' : 'scale(1)' }}
+                                  >★</button>
+                                ))}
+                                <span style={{ marginLeft: '8px', fontSize: '0.82rem', color: '#64748b', alignSelf: 'center' }}>
+                                  {['','Schlecht','Nicht so gut','Okay','Sehr gut','Perfekt'][rating]}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Comment + Send */}
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                              <input
+                                type="text"
+                                placeholder={(fb.target || 'general') === 'general' ? 'Was hat dir besonders gefallen?' : 'Wie hat es geschmeckt?'}
+                                value={fb.comment || ''}
+                                onChange={e => updateFeedback(order.id, 'comment', e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && !isSubmitting && handleFeedbackSubmit(order.id, menu)}
+                                disabled={isSubmitting}
+                                style={{ flex: 1, padding: '11px 14px', borderRadius: '8px', border: `1.5px solid ${fb.error ? '#fca5a5' : '#e2e8f0'}`, fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif', outline: 'none' }}
+                              />
+                              <button
+                                onClick={() => handleFeedbackSubmit(order.id, menu)}
+                                disabled={isSubmitting || !fb.comment?.trim()}
+                                style={{ minWidth: '90px', height: '44px', borderRadius: '8px', border: 'none', background: isSubmitting ? '#0891a3' : '#037A8B', color: '#fff', fontWeight: 700, cursor: isSubmitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.88rem', opacity: (!fb.comment?.trim() && !isSubmitting) ? 0.5 : 1, transition: 'all 0.2s', fontFamily: 'Montserrat, sans-serif' }}
+                              >
+                                {isSubmitting ? (
+                                  <>
+                                    <span style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+                                    Sende…
+                                  </>
+                                ) : 'Senden'}
+                              </button>
+                            </div>
+
+                            {fb.error && (
+                              <div style={{ fontSize: '0.82rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '6px', padding: '8px 12px' }}>
+                                ⚠️ {fb.error}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
+                    )
+                  })()}
 
                 </div>
               )

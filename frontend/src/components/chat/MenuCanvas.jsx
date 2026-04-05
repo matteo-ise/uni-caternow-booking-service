@@ -1,5 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import DishImage from './DishImage'
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
 
 const SECTIONS = [
   { key: 'vorspeise',    label: 'Vorspeise', icon: '🥗', kpi: 'Appetizer' },
@@ -8,7 +18,8 @@ const SECTIONS = [
   { key: 'nachspeise',   label: 'Nachspeise', icon: '🍮', kpi: 'Sweet Finish' },
 ]
 
-export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, step }) {
+export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, step, onWeiter }) {
+  const isMobile = useIsMobile()
   const [confirmed, setConfirmed] = useState({ vorspeise: false, hauptspeise1: false, hauptspeise2: false, nachspeise: false })
   const [indices, setIndices] = useState({ vorspeise: 0, hauptspeise1: 0, hauptspeise2: 0, nachspeise: 0 })
 
@@ -41,6 +52,51 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
     if (key === 'hauptspeise1' && newState && onSelect) {
       onSelect('TRIGGER_UPSELL', true)
     }
+  }
+
+  // ── Compact mobile strip ────────────────────────────────
+  if (isMobile) {
+    const allConfirmedMobile = confirmed['vorspeise'] && confirmed['hauptspeise1'] && confirmed['nachspeise']
+    return (
+      <div className="canvas-mobile-strip">
+        <div className="canvas-mobile-chips">
+          {SECTIONS.map(section => {
+            if (section.key === 'hauptspeise2' && !showH2) return null
+            const selected = menu[section.key]
+            const isConf = confirmed[section.key]
+            return (
+              <div
+                key={section.key}
+                className={`canvas-chip ${selected ? 'canvas-chip--active' : ''} ${isConf ? 'canvas-chip--confirmed' : ''}`}
+                onClick={() => selected && toggleConfirm(section.key)}
+                title={selected ? (isConf ? 'Auswahl bestätigt' : 'Tippen zum Bestätigen') : ''}
+              >
+                <span className="canvas-chip__icon">{section.icon}</span>
+                <span className="canvas-chip__label">{section.kpi}</span>
+                <span className="canvas-chip__name">
+                  {selected ? selected.name : '—'}
+                </span>
+                {isConf && <span className="canvas-chip__check">✓</span>}
+              </div>
+            )
+          })}
+          {step === 2 && allConfirmedMobile && (
+            <button className="canvas-chip canvas-chip--cta" onClick={onConfirm}>
+              <span className="canvas-chip__icon">🎉</span>
+              <span className="canvas-chip__label">Fertig</span>
+              <span className="canvas-chip__name">Anfragen</span>
+            </button>
+          )}
+          {step === 3 && onWeiter && (
+            <button className="canvas-chip canvas-chip--cta" onClick={onWeiter}>
+              <span className="canvas-chip__icon">→</span>
+              <span className="canvas-chip__label">Weiter</span>
+              <span className="canvas-chip__name">Prüfen</span>
+            </button>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

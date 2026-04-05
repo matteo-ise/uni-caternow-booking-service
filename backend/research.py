@@ -69,23 +69,32 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     can_search = check_and_inc_usage("google_search", limit=500)
 
     # Nutze das stärkere Modell mit Search Grounding (nur wenn Limit nicht erreicht)
-    tools = [{"google_search_retrieval": {}}] if can_search else []
+    tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval())] if can_search else []
     
     model = genai.GenerativeModel(
         "gemini-3.1-flash-lite-preview", 
         tools=tools 
     )
     
-    prompt = f"""Analysiere die Firma "{search_target}". Antworte NUR mit JSON, keine Markdown Blöcke. Formatiere strikt als:
+    prompt = f"""Recherchiere jetzt aktiv die Firma "{search_target}" über Google Search.
+
+KRITISCHE AUFGABE – hq_address:
+- Suche explizit im IMPRESSUM der offiziellen Firmenwebsite (z.B. firma.de/impressum, firma.de/legal, firma.de/kontakt)
+- ODER suche nach dem eingetragenen Firmensitz (Registered office, Hauptsitz, Headquarters)
+- Gib NUR die REALE, verifizierbare Postadresse an – EXAKT wie sie im Impressum oder offiziellen Register steht
+- NIEMALS eine erfundene oder Beispieladresse (z.B. "Musterstraße", "Beispielstraße") verwenden
+- Falls keine echte Adresse verifizierbar ist: Setze hq_address auf null
+
+Antworte NUR mit JSON, keine Markdown-Blöcke:
 {{
-  "company_name": "Gefundener echter Name",
-  "domain": "gefundene-domain.de",
-  "core_values": ["Wert1", "Wert2"], 
-  "fancy_score": 50, 
-  "summary": "...", 
-  "company_colors": ["Farbe"], 
-  "slogan": "...",
-  "hq_address": "Reale Hauptsitz Adresse (Straße, PLZ, Ort) falls findbar, sonst null"
+  "company_name": "Offizieller Firmenname",
+  "domain": "offizielle-domain.de",
+  "core_values": ["Wert1", "Wert2"],
+  "fancy_score": 50,
+  "summary": "Kurze Firmenbeschreibung",
+  "company_colors": ["Primärfarbe"],
+  "slogan": "Offizieller Slogan oder null",
+  "hq_address": "Straße Hausnr, PLZ Ort – aus dem Impressum/Register – oder null"
 }}"""
 
     try:

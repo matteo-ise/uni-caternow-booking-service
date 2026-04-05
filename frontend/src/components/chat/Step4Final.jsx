@@ -54,9 +54,10 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
   // Kontaktdaten
   const [name, setName] = useState(userName || '')
   const [email, setEmail] = useState(userEmail || '')
-  const [address, setAddress] = useState(wizardData.customerType === 'business' && wizardData.companyName ? `${wizardData.companyName} Headquarters, Musterstraße 1, Berlin` : '')
+  const [address, setAddress] = useState('')
   const [additionalNotes, setAdditionalNotes] = useState('')
   const [isAiAddress] = useState(wizardData.customerType === 'business' && !!wizardData.companyName)
+  const [addressGlow, setAddressGlow] = useState(false)
 
   // Quantities logic
   const participantCount = parseInt(wizardData.persons) || 0
@@ -104,8 +105,10 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         if (resp.ok) {
           const data = await resp.json()
           setStory(data.story)
-          if (data.hq_address && address === '' || address.includes('Musterstraße 1')) {
+          if (data.hq_address && (address === '' || address.includes('Musterstraße 1'))) {
             setAddress(data.hq_address)
+            setAddressGlow(true)
+            setTimeout(() => setAddressGlow(false), 2000)
           }
           if (data.logo_url) {
             setLocal(prev => ({ ...prev, companyLogo: data.logo_url }))
@@ -188,7 +191,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
 
       <h2 className="final__title" style={{ fontWeight: 800 }}>Zusammenfassung & Abschluss</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '32px' }}>
+      <div className="final__two-col">
         {/* Left Col: Menu */}
         <div>
           <h3 style={{ marginBottom: '16px', fontSize: '1.1rem', fontWeight: 700 }}>🍽️ Dein gewähltes Menü</h3>
@@ -295,7 +298,8 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
               <textarea 
                 value={address} 
                 onChange={e => setAddress(e.target.value)} 
-                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '60px', resize: 'vertical' }}
+                className={addressGlow ? 'ai-glow-pulse' : ''}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '60px', resize: 'vertical', transition: 'all 0.3s ease' }}
                 placeholder="Straße, PLZ, Ort"
               />
             </div>
@@ -410,6 +414,16 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         @keyframes egg-float {
           0%, 100% { transform: translateY(0) rotate(0deg); }
           50% { transform: translateY(-15px) rotate(8deg); }
+        }
+        .ai-glow-pulse {
+          animation: ai-glow 1s ease-in-out infinite alternate;
+          border-color: #037A8B !important;
+          box-shadow: 0 0 15px rgba(3, 122, 139, 0.4);
+          background-color: #f0fdfa !important;
+        }
+        @keyframes ai-glow {
+          from { box-shadow: 0 0 5px rgba(3, 122, 139, 0.2); }
+          to { box-shadow: 0 0 20px rgba(3, 122, 139, 0.6); }
         }
       `}</style>
 

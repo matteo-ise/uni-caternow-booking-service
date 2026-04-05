@@ -64,6 +64,29 @@ def get_memory(lead_id: str) -> str | None:
         return path.read_text(encoding="utf-8")
     return None
 
+def save_research_sidecar(lead_id: str, data: dict):
+    """Speichert Research-Daten als JSON-Sidecar neben der Memory-Datei."""
+    import json
+    safe_id = "".join(c for c in lead_id if c.isalnum() or c in ('-', '_')).strip()
+    if not safe_id:
+        safe_id = "anonymous"
+    path = MEMORY_DIR / f"{safe_id}.json"
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+def get_research_sidecar(lead_id: str) -> dict | None:
+    """Liest den Research-Sidecar für einen Lead."""
+    import json
+    safe_id = "".join(c for c in lead_id if c.isalnum() or c in ('-', '_')).strip()
+    if not safe_id:
+        safe_id = "anonymous"
+    path = MEMORY_DIR / f"{safe_id}.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
 def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_facts: dict):
     """
     Diese Funktion liest die aktuelle Memory, füttert den neuen Chat-Austausch

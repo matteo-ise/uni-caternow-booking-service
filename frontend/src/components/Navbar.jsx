@@ -22,7 +22,6 @@ export default function Navbar() {
           <li><a href="#wie-es-funktioniert" onClick={() => setIsMenuOpen(false)}>So funktioniert's</a></li>
           <li><a href="#leistungen" onClick={() => setIsMenuOpen(false)}>Leistungen</a></li>
           <li><Link to="/admin" onClick={() => setIsMenuOpen(false)}>Admin Studio</Link></li>
-          <li><a href="#kontakt" onClick={() => setIsMenuOpen(false)}>Kontakt</a></li>
         </ul>
       </div>
 

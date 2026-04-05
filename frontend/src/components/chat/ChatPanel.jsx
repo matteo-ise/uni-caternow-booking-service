@@ -1,6 +1,14 @@
 import { useRef, useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
+const SERVICE_META = {
+  'Geschirr/Besteck':                              { icon: '🍽️', sub: 'Teller & Besteck' },
+  'Gläser':                                        { icon: '🥂', sub: 'Wein, Sekt & Wasser' },
+  'Dekoration':                                    { icon: '🌸', sub: 'Tischdeko & Ambiente' },
+  'Personal (z. B. Servicekräfte, Barkeeper)':     { icon: '👨‍🍳', sub: 'Service & Bar' },
+  'Mietmöbel (z. B. Tische, Stühle)':             { icon: '🪑', sub: 'Tische & Stühle' },
+}
+
 const BUSINESS_EVENTS = [
   { id: 'Firmenfeier', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=400&q=80' },
   { id: 'Konferenz', img: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=400&q=80' },
@@ -149,23 +157,54 @@ export default function ChatPanel({
           </div>
         )}
 
-        {/* Quick-Reply Buttons */}
-        {quickReplies.length > 0 && !isEventSelection && (
+        {/* Service-Auswahl Cards (Step 3) */}
+        {step === 3 && quickReplies.length > 0 && !isEventSelection && (
+          <div className="service-selection">
+            <p className="service-selection__hint">Mehrfachauswahl möglich</p>
+            <div className="service-grid">
+              {quickReplies.filter(r => r !== 'Nein, danke').map(reply => {
+                const meta = SERVICE_META[reply] || { icon: '✓', sub: '' }
+                const isSelected = selectedServices.includes(reply)
+                const mainLabel = reply.split(' (')[0]
+                return (
+                  <button
+                    key={reply}
+                    className={`service-card ${isSelected ? 'service-card--active' : ''}`}
+                    onClick={() => onQuickReply(reply)}
+                    disabled={isWaiting}
+                  >
+                    {isSelected && <span className="service-card__check">✓</span>}
+                    <span className="service-card__icon">{meta.icon}</span>
+                    <span className="service-card__label">{mainLabel}</span>
+                    <span className="service-card__sub">{meta.sub}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              className="service-skip-btn"
+              onClick={() => onQuickReply('Nein, danke')}
+              disabled={isWaiting}
+            >
+              Ohne Extras fortfahren
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        )}
+
+        {/* Quick-Reply Buttons (alle anderen Steps) */}
+        {quickReplies.length > 0 && !isEventSelection && step !== 3 && (
           <div className="chat-panel__chips">
-            {quickReplies.map(reply => {
-              const isSelected = step === 3 && selectedServices.includes(reply);
-              return (
-                <button
-                  key={reply}
-                  className={`chip ${isSelected ? 'chip--active' : ''}`}
-                  onClick={() => onQuickReply(reply)}
-                  disabled={isWaiting}
-                  style={isSelected ? { background: '#037A8B', color: '#fff', border: '1px solid #037A8B' } : {}}
-                >
-                  {isSelected && '✓ '}{reply}
-                </button>
-              )
-            })}
+            {quickReplies.map(reply => (
+              <button
+                key={reply}
+                className="chip"
+                onClick={() => onQuickReply(reply)}
+                disabled={isWaiting}
+              >
+                {reply}
+              </button>
+            ))}
           </div>
         )}
 

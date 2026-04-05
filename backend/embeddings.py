@@ -234,8 +234,9 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
         for d, s in vres:
             if np.sum(np.abs(np.array(d.embedding))) > 0:
                 results.append(Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, image_url=d.image_url, similarity_score=float(s)))
-    except:
-        pass
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Vector search failed, falling back to fuzzy: {e}")
 
     if len(results) < top_k:
         all_d = db.query(DBDish)

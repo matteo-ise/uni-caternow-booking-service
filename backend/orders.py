@@ -11,7 +11,7 @@ from database import get_db
 from db_models import DBOrder, DBFeedback, DBDish, DBUser
 from auth import get_current_user, get_optional_user
 from embeddings import re_embed_dish
-from memory import get_memory
+from memory import get_memory, get_research_sidecar
 
 router = APIRouter()
 
@@ -40,32 +40,66 @@ async def get_checkout_story(req: StoryRequest):
     logo_url = ""
     story = "Schön, dass du dich für ein Catering von uns entschieden hast! Wir freuen uns darauf, dein Event kulinarisch zu begleiten."
 
-    if memory:
-        # Extract metadata
-        addr_match = re.search(r"\*\*HQ Adresse:\*\* (.*)", memory)
-        if addr_match:
-            hq_address = addr_match.group(1).strip()
-            if hq_address == "Unbekannt" or hq_address == "null" or hq_address == "None":
-                hq_address = ""
-                
-        logo_match = re.search(r"\*\*Logo URL:\*\* (.*)", memory)
-        if logo_match:
-            logo_url = logo_match.group(1).strip()
+    # Read research sidecar first (reliable source), fall back to memory regex
+    sidecar = get_research_sidecar(req.lead_id)
+    if sidecar:
+        raw_addr = sidecar.get("hq_address") or ""
+        if str(raw_addr).lower() not in ("unbekannt", "null", "none", "", "-"):
+            hq_address = str(raw_addr).strip()
+        raw_logo = sidecar.get("logo_url") or ""
+        if str(raw_logo).lower() not in ("none", "null", "-", ""):
+            logo_url = str(raw_logo).strip()
 
-        model = genai.GenerativeModel("models/gemini-flash-lite-latest")
-        prompt = f"""
-        Basierend auf diesem Lead-Gedächtnis:
-        {memory}
-        
-        Schreibe einen extrem charmanten, kurzen Verkaufs-Gruß (max 3 Sätze) für die Checkout-Seite.
-        - Sprich den Kunden persönlich an (Du/Sie je nach Score).
-        - Nutze Storytelling: Erwähne den Anlass, die Firma oder eine Vorliebe (z.B. 'Passend zu eurem Firmenevent bei [Firma]...').
-        - Beende mit einem herzlichen Gruß in die Stadt des Kunden (falls bekannt, sonst allgemein).
-        - Der Text soll Hunger auf das Menü machen.
-        """
+    if memory and (not hq_address or not logo_url):
+        # Fallback: parse from memory markdown
+        addr_match = re.search(r"\*\*HQ[^:*]*:\*\*\s*(.*)", memory, re.IGNORECASE)
+        if addr_match and not hq_address:
+            val = addr_match.group(1).strip()
+            if val.lower() not in ("unbekannt", "null", "none", "", "-"):
+                hq_address = val
+
+        logo_match = re.search(r"\*\*Logo[^:*]*:\*\*\s*(.*)", memory, re.IGNORECASE)
+        if logo_match and not logo_url:
+            val = logo_match.group(1).strip()
+            if val.lower() not in ("none", "null", "-", ""):
+                logo_url = val
+
+        # Extract company color for hearts
+        color_match = re.search(r"\*\*Branding:\*\*\s*(.*?)(?:\s*\||\n)", memory, re.IGNORECASE)
+        company_color = color_match.group(1).strip().lower() if color_match else ""
+        color_to_heart = {
+            "rot": "❤️", "red": "❤️",
+            "blau": "💙", "blue": "💙",
+            "grün": "💚", "gruen": "💚", "green": "💚", "türkis": "💚", "teal": "💚",
+            "lila": "💜", "violett": "💜", "purple": "💜",
+            "orange": "🧡",
+            "gelb": "💛", "yellow": "💛",
+        }
+        heart = next((h for k, h in color_to_heart.items() if k in company_color), "🤍")
+
+        model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
+        prompt = f"""Du bist ein kulinarischer Storyteller für CaterNow, ein Premium-Catering-Service.
+
+Basierend auf diesem Lead-Profil:
+{memory}
+
+Schreibe eine persönliche, kulinarische Menü-Story (3-4 Sätze) für die Checkout-Seite.
+
+STRUKTUR:
+1. Eröffne mit einem sinnlichen, kulinarischen Bild – beschreibe konkret Aromen, Texturen oder Zutaten der Gerichte aus dem Profil
+2. Verbinde das Menü mit dem Anlass und/oder der Unternehmensidentität (nutze Firmennamen, Werte oder Event-Art aus dem Profil)
+3. Wecke Vorfreude: Was werden die Gäste erleben? Welches Gefühl soll das Menü hinterlassen?
+4. Herzlicher Abschluss – passend zur Stadt oder zum Anlass
+
+REGELN:
+- Sprich die Person persönlich an (Du wenn Fancy-Score >70, Sie wenn <70)
+- Erwähne mindestens ein konkretes Gericht oder eine Zutat, falls im Profil vorhanden
+- Ausgabe: NUR den Story-Text, kein JSON, keine Formatierung, keine umschließenden Anführungszeichen
+- Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
+"""
         try:
             response = model.generate_content(prompt)
-            story = response.text.strip()
+            story = response.text.strip().strip('"')
         except:
             pass
 

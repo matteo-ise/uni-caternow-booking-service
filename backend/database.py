@@ -23,7 +23,12 @@ if DATABASE_URL.startswith("postgres://"):
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,          # Test connection before use — fixes Neon cold-start
+        pool_recycle=300,            # Recycle connections after 5 min to prevent stale connections
+        connect_args={"connect_timeout": 10},  # 10s connect timeout instead of indefinite wait
+    )
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

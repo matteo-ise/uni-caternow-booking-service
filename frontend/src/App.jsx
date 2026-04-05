@@ -26,7 +26,7 @@ function Home() {
         }
       } catch (err) {
         // Render Free Tier Spin-up takes time
-        setLoadingMsg('CaterNow startet! Gleich geht\'s los...')
+        setLoadingMsg('CaterNow startet! Gleich geht\'s los... (30 Sekunden)')
       }
     }
     

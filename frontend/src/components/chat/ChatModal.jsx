@@ -188,41 +188,30 @@ export default function ChatModal({ isOpen, onClose }) {
 
   function handleWeiter() { setStep(4) }
   function handleNavigate(targetStep) { setStep(targetStep) }
-  async function handleSubmit() {
-    if (!currentUser) {
-      alert("Bitte logge dich ein, um die Anfrage abzuschließen!")
-      return
-    }
-    
+  async function handleSubmit(finalData = {}) {
+    if (!currentUser) return
+
     try {
       const token = await currentUser.getIdToken()
       const payload = {
         lead_id: leadId,
-        total_price: 0,
+        total_price: finalData.totalPrice || 0,
         order_data: {
           menu: menu,
           services: selectedServices,
-          event_details: wizardData
+          event_details: wizardData,
+          contact: { name: finalData.name, email: finalData.email, address: finalData.address },
+          additionalNotes: finalData.additionalNotes,
         }
       }
-
       const resp = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json' 
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-
-      if (resp.ok) {
-        setStep(5)
-      } else {
-        alert("Es gab ein Problem bei der Übermittlung.")
-      }
+      if (resp.ok) setStep(5)
     } catch(err) {
       console.error(err)
-      alert("Netzwerkfehler.")
     }
   }
 
@@ -262,8 +251,8 @@ export default function ChatModal({ isOpen, onClose }) {
                 />
               </div>
               <div className="chat-layout__right">
-                <MenuCanvas menuOptions={menuOptions} menu={menu} onSelect={handleMenuSelect} onConfirm={handleMenuConfirm} step={step} />
-                {step === 3 && <button className="btn-filled canvas__weiter" onClick={handleWeiter}>Bestellung prüfen →</button>}
+                <MenuCanvas menuOptions={menuOptions} menu={menu} onSelect={handleMenuSelect} onConfirm={handleMenuConfirm} step={step} onWeiter={handleWeiter} />
+                {step === 3 && <button className="btn-filled canvas__weiter canvas__weiter--desktop" onClick={handleWeiter}>Bestellung prüfen →</button>}
               </div>
             </div>
           )}
