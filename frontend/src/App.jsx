@@ -12,7 +12,7 @@ import { API_URL } from './config'
 function Home() {
   const [chatOpen, setChatOpen] = useState(false)
   const [backendReady, setBackendReady] = useState(false)
-  const [loadingMsg, setLoadingMsg] = useState('CaterNow startet! Gleich geht\'s los...')
+  const [loadingMsg, setLoadingMsg] = useState('CaterNow startet! Gleich geht\'s los... (30 Sekunden)')
 
   // Health Check Polling für Kaltstart-Abfang
   useEffect(() => {
