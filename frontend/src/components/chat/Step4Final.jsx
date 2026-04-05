@@ -33,7 +33,7 @@ function Accordion({ title, children, defaultOpen = false }) {
         aria-expanded={open}
       >
         <span>{title}</span>
-        <span className="acc-icon">{open ? "–" : "+"}</span>
+        <span className="acc-icon">{open ? "-" : "+"}</span>
       </button>
       {open && <div className="acc-body">{children}</div>}
     </div>
@@ -128,7 +128,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
   const display = editing ? local : wizardData
   const dateFormatted = display.date
     ? new Date(display.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
-    : '–'
+    : '-'
   
   const canSubmit = email.trim() !== '' && address.trim() !== '' && name.trim() !== '' && !editing && !isSubmitting
 
@@ -197,7 +197,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
               const dish = menu[course.key]
               if (!dish && course.key === 'hauptspeise2') return null
               
-              const dishName = dish && typeof dish === 'object' ? dish.name : (dish || '–')
+              const dishName = dish && typeof dish === 'object' ? dish.name : (dish || '-')
               
               return (
                 <div key={course.key} style={{ display: 'flex', gap: '16px', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #eef2f6' }}>
@@ -362,7 +362,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
           </Accordion>
 
           <Accordion title="Firmen-Infos (Research Intelligence)">
-            <p><strong>Firma:</strong> {wizardData.companyName || '–'}</p>
+            <p><strong>Firma:</strong> {wizardData.companyName || '-'}</p>
             <p><strong>Kundentyp:</strong> {wizardData.customerType === 'business' ? 'B2B' : 'B2C'}</p>
             <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '8px' }}>Unsere KI hat Ihr Profil analysiert, um dieses Angebot zu personalisieren.</p>
           </Accordion>
@@ -414,19 +414,13 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       `}</style>
 
       {/* ── Absenden ─────────────────────────────────────────── */}
-      <div className="final__footer" style={{ borderTop: '1px solid #eef2f6', paddingTop: '32px', marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="final__footer">
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0 }}>* Pflichtfelder. Bitte fülle Name, E-Mail und Adresse aus.</p>
         <button 
           className={`btn-filled btn-filled--lg ${!canSubmit ? 'btn-disabled' : ''}`} 
           onClick={handleFinalSubmit} 
-          disabled={!canSubmit} 
-          style={{ 
-            width: 'auto', 
-            padding: '16px 48px', 
-            opacity: canSubmit ? 1 : 0.5, 
-            cursor: canSubmit ? 'pointer' : 'not-allowed',
-            minWidth: '280px'
-          }}
+          disabled={!canSubmit}
+          style={{ width: '100%', maxWidth: '400px' }}
         >
           {isSubmitting ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
@@ -434,7 +428,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
               Anfrage wird gesendet...
             </span>
           ) : (
-            `Jetzt verbindlich anfragen für ${priceStats.total.toFixed(2)} € →`
+            `Jetzt anfragen: ${priceStats.total.toFixed(2)} € →`
           )}
         </button>
       </div>

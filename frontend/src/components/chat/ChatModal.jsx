@@ -229,12 +229,14 @@ export default function ChatModal({ isOpen, onClose }) {
     }
   }
 
+  const isMobile = window.innerWidth <= 768
+
   return (
     <>
       {isOpen && <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />}
       
       <div 
-        className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} 
+        className={`modal ${step > 1 || isMobile ? 'modal--fullscreen' : ''}`} 
         style={{ display: isOpen ? 'flex' : 'none' }}
         role="dialog" 
         aria-modal 

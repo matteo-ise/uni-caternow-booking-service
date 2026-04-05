@@ -16,7 +16,7 @@ export default function HeroSection({ onOpenChat, disabled }) {
             <p className="hero-highlight">schnell &amp; unkompliziert</p>
             <p className="hero-copy">
               Unser KI-Berater stellt dir in Sekunden ein maßgeschneidertes
-              3-Gang-Menü zusammen – abgestimmt auf deinen Anlass,
+              3-Gang-Menü zusammen - abgestimmt auf deinen Anlass,
               dein Budget und deine Wünsche.
             </p>
             <button className="hero-cta-btn" onClick={onOpenChat} disabled={disabled} style={{ opacity: disabled ? 0.6 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
@@ -46,12 +46,12 @@ export default function HeroSection({ onOpenChat, disabled }) {
       {/* ── Bento Grid ──────────────────────────────────────────── */}
       <section className="bento-section" id="leistungen">
         <h2 className="bento-title">Warum CaterNow?</h2>
-        <p className="bento-sub">Alles, was du für ein perfektes Event brauchst – an einem Ort.</p>
+        <p className="bento-sub">Alles, was du für ein perfektes Event brauchst - an einem Ort.</p>
         <div className="bento-grid" id="wie-es-funktioniert">
           <div className="bento-card bento-card--wide">
-            <span className="bento-kpi">⏱️ 2–3 Min.</span>
+            <span className="bento-kpi">⏱️ 2-3 Min.</span>
             <h3>Schnell anfragen</h3>
-            <p>Einfach Wünsche im Chat beschreiben – unser Berater stellt sofort ein passendes 3-Gang-Menü zusammen.</p>
+            <p>Einfach Wünsche im Chat beschreiben - unser Berater stellt sofort ein passendes 3-Gang-Menü zusammen.</p>
           </div>
 
           <div className="bento-card bento-card--tall">
@@ -69,13 +69,13 @@ export default function HeroSection({ onOpenChat, disabled }) {
           <div className="bento-card">
             <span className="bento-kpi">🎯 Matching</span>
             <h3>Event-Typen</h3>
-            <p>Business-Lunch, Hochzeit, Sommerfest & mehr – immer das passende Menü.</p>
+            <p>Business-Lunch, Hochzeit, Sommerfest & mehr - immer das passende Menü.</p>
           </div>
 
           <div className="bento-card bento-card--wide">
             <span className="bento-kpi">🧳 Add-ons</span>
             <h3>Logistik & Extras</h3>
-            <p>Aufbau, Geschirr, Personal – alles flexibel zubuchbar direkt über den Berater.</p>
+            <p>Aufbau, Geschirr, Personal - alles flexibel zubuchbar direkt über den Berater.</p>
           </div>
         </div>
       </section>

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 
 const BUSINESS_EVENTS = [
   { id: 'Firmenfeier', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=400&q=80' },
@@ -32,9 +33,9 @@ export default function ChatPanel({
   selectedServices = [],
   step
 }) {
+  const { currentUser } = useAuth()
   const bottomRef = useRef(null)
-
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -53,9 +54,9 @@ export default function ChatPanel({
   }
 
   const handleHotkeyClick = (text) => {
-    const current = inputValue.trim();
-    onInput(current ? `${current} ${text}` : text);
-    setHasInteracted(true);
+    const current = inputValue.trim()
+    onInput(current ? `${current} ${text}` : text)
+    setHasInteracted(true)
   }
 
   const SMART_HOTKEYS = [
@@ -65,10 +66,10 @@ export default function ChatPanel({
     "vegane Optionen 🌱",
     "Fingerfood 🍢",
     "italienischer Abend 🇮🇹"
-  ];
+  ]
 
   const currentEventCards = customerType === 'business' ? BUSINESS_EVENTS : PRIVATE_EVENTS
-  const isInitialState = isEventSelection && messages.length <= 1;
+  const isInitialState = isEventSelection && messages.length <= 1
 
   return (
     <div className={`chat-panel ${isInitialState ? 'chat-panel--centered' : ''}`}>
@@ -78,16 +79,25 @@ export default function ChatPanel({
           if (msg.role === 'loading') {
             return (
               <div key={i} className="msg msg--loading">
-                <span /><span /><span />
+                <span></span><span></span><span></span>
               </div>
             )
           }
+          const isBot = msg.role === 'bot'
           return (
             <div key={i} className={`msg msg--${msg.role}`}>
-              {msg.role === 'bot' && (
-                <div className="msg__avatar" style={{ background: 'linear-gradient(135deg, #037A8B, #026373)', fontSize: '1rem' }}>🤖</div>
-              )}
-              <div className="msg__bubble" style={{ whiteSpace: 'pre-wrap' }}>{msg.text || ''}</div>
+              <div className={`msg__avatar ${isBot ? 'msg__avatar--bot' : 'msg__avatar--user'}`}>
+                {isBot ? (
+                  <img src="/favicon.svg" alt="CaterNow" />
+                ) : (
+                  currentUser?.photoURL ? (
+                    <img src={currentUser.photoURL} alt="User" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span>{currentUser?.displayName?.charAt(0).toUpperCase() || '👤'}</span>
+                  )
+                )}
+              </div>
+              <div className="msg__bubble">{msg.text || ''}</div>
             </div>
           )
         })}
@@ -105,7 +115,7 @@ export default function ChatPanel({
                     src={ev.img} 
                     alt={ev.id} 
                     onError={(e) => {
-                      e.target.onerror = null; 
+                      e.target.onerror = null
                       e.target.src="https://images.unsplash.com/photo-1495191746160-713f09762446?auto=format&fit=crop&w=400&q=80"
                     }}
                   />
@@ -142,14 +152,13 @@ export default function ChatPanel({
         {quickReplies.length > 0 && !isEventSelection && (
           <div className="chat-panel__chips">
             {quickReplies.map(reply => {
-              const isSelected = step === 3 && selectedServices.includes(reply);
+              const isSelected = step === 3 && selectedServices.includes(reply)
               return (
                 <button
                   key={reply}
                   className={`chip ${isSelected ? 'chip--active' : ''}`}
                   onClick={() => onQuickReply(reply)}
                   disabled={isWaiting}
-                  style={isSelected ? { background: '#037A8B', color: '#fff', border: '1px solid #037A8B' } : {}}
                 >
                   {isSelected && '✓ '}{reply}
                 </button>
@@ -188,3 +197,4 @@ export default function ChatPanel({
     </div>
   )
 }
+

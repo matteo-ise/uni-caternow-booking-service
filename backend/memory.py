@@ -80,7 +80,7 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
     model = genai.GenerativeModel("models/gemini-2.5-flash")
     
     prompt = f"""
-    Du bist die "Lead Intelligence Unit" von CaterNow – ein psychologisch geschulter Sales-Analyst. 
+    Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst. 
     Deine Aufgabe ist es, aus dem Chat-Verlauf eines Kunden (Lead) extrem präzise Erkenntnisse (Findings) zu extrahieren.
     
     Aktuelles Dossier:
