@@ -22,6 +22,14 @@ export default function HeroSection({ onOpenChat, disabled }) {
             <button className="hero-cta-btn" onClick={onOpenChat} disabled={disabled} style={{ opacity: disabled ? 0.6 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
               MENÜ ZUSAMMENSTELLEN
             </button>
+
+            {/* Sponsor Trust Badge */}
+            <div className="hero-sponsor-badge">
+              <span className="hero-sponsor-label">Powered by</span>
+              <div className="hero-sponsor-box">
+                <img src="/maincatering_logo.png" alt="MainCatering Logo" className="hero-sponsor-logo" />
+              </div>
+            </div>
           </div>
 
           {/* Rechte Spalte – Teal + Teller */}
