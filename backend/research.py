@@ -14,11 +14,48 @@ class ResearchResult(BaseModel):
     hq_address: str | None = None
     logo_url: str | None = None
 
+from database import SessionLocal
+from db_models import DBUsageStats
+from sqlalchemy.sql import func
+from datetime import datetime, timezone
+
 # In-memory cache for research to save quota
 _research_cache = {}
 
+def check_and_inc_usage(feature: str, limit: int = 500) -> bool:
+    """Prüft das Tageslimit und erhöht den Zähler. Gibt True zurück wenn unter Limit."""
+    db = SessionLocal()
+    try:
+        stats = db.query(DBUsageStats).filter(DBUsageStats.feature == feature).first()
+        now = datetime.now(timezone.utc)
+        
+        if not stats:
+            stats = DBUsageStats(feature=feature, count=1, last_reset=now)
+            db.add(stats)
+            db.commit()
+            return True
+        
+        # Reset wenn neuer Tag
+        if stats.last_reset.date() < now.date():
+            stats.count = 1
+            stats.last_reset = now
+            db.commit()
+            return True
+        
+        if stats.count >= limit:
+            return False
+            
+        stats.count += 1
+        db.commit()
+        return True
+    except Exception as e:
+        print(f"[Usage Check Error] {e}")
+        return True # Im Zweifel erlauben
+    finally:
+        db.close()
+
 def run_company_research(company_name_or_domain: str) -> ResearchResult:
-    """Führt Recherche durch mit Google Search Grounding."""
+    """Führt Recherche durch mit Google Search Grounding (Limit: 500/Tag)."""
     if not company_name_or_domain:
         return ResearchResult(is_business=False)
 
@@ -28,10 +65,15 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     if search_target in _research_cache:
         return _research_cache[search_target]
 
-    # Nutze das stärkere Modell mit Search Grounding
+    # Check daily limit
+    can_search = check_and_inc_usage("google_search", limit=500)
+
+    # Nutze das stärkere Modell mit Search Grounding (nur wenn Limit nicht erreicht)
+    tools = [{"google_search_retrieval": {}}] if can_search else []
+    
     model = genai.GenerativeModel(
         "models/gemini-1.5-flash-latest", 
-        tools=[{"google_search_retrieval": {}}] 
+        tools=tools 
     )
     
     prompt = f"""Analysiere die Firma "{search_target}". Antworte NUR mit JSON, keine Markdown Blöcke. Formatiere strikt als:
