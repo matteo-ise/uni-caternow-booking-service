@@ -72,7 +72,7 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     tools = [{"google_search_retrieval": {}}] if can_search else []
     
     model = genai.GenerativeModel(
-        "models/gemini-1.5-flash-latest", 
+        "gemini-1.5-flash", 
         tools=tools 
     )
     

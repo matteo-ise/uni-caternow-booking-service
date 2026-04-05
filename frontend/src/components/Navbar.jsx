@@ -53,8 +53,14 @@ export default function Navbar() {
           </button>
         )}
         
-        <button className="nav-mobile-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Menü öffnen">
-          {isMenuOpen ? '✕' : '☰'}
+        <button 
+          className={`nav-mobile-toggle ${isMenuOpen ? 'nav-mobile-toggle--open' : ''}`} 
+          onClick={() => setIsMenuOpen(!isMenuOpen)} 
+          aria-label="Menü öffnen"
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
         </button>
       </div>
     </nav>

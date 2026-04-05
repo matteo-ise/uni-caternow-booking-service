@@ -21,7 +21,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
 router = APIRouter()
-GEMINI_MODEL = "models/gemini-1.5-flash-latest"
+GEMINI_MODEL = "gemini-1.5-flash"
 
 BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der charmanteste Menü-Verkäufer der Welt.
 
