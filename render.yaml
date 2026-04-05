@@ -5,7 +5,7 @@ services:
     env: python
     region: frankfurt # Empfohlen für EU, Render unterstützt 'frankfurt'
     rootDir: backend
-    buildCommand: "pip install --upgrade pip && pip install --prefer-binary -r requirements.txt"
+    buildCommand: "pip install uv && uv pip install --system --prefer-binary -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /api/health
     envVars:
