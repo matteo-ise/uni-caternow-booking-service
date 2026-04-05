@@ -371,27 +371,27 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         <p style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#1e293b', lineHeight: '1.6', maxWidth: '800px', margin: '0 auto' }}>
           "{story}"
         </p>
-        
-        {/* Easter Egg / Osterei */}
-        <div className="easter-egg-container" style={{ marginTop: '24px' }}>
-          <div className="pulsing-egg" style={{ fontSize: '2.5rem', cursor: 'pointer', display: 'inline-block' }} title="Ein kleines Extra für dich!">
-            🥚✨
-          </div>
-          <p style={{ fontSize: '0.75rem', color: '#037A8B', fontWeight: 700, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Oster-Special entdeckt!
-          </p>
-        </div>
-
-        <style jsx>{`
-          .pulsing-egg {
-            animation: egg-float 3s infinite ease-in-out;
-          }
-          @keyframes egg-float {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-10px) rotate(5deg); }
-          }
-        `}</style>
       </div>
+
+      {/* Easter Egg / Osterei - Outside the box */}
+      <div className="easter-egg-container" style={{ marginTop: '40px', textAlign: 'center' }}>
+        <div className="pulsing-egg" style={{ fontSize: '4rem', cursor: 'pointer', display: 'inline-block' }} title="Happy Easter!">
+          🥚✨
+        </div>
+        <p style={{ fontSize: '1.2rem', color: '#037A8B', fontWeight: 800, marginTop: '12px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+          Happy Easter
+        </p>
+      </div>
+
+      <style jsx>{`
+        .pulsing-egg {
+          animation: egg-float 3s infinite ease-in-out;
+        }
+        @keyframes egg-float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-15px) rotate(8deg); }
+        }
+      `}</style>
 
       {/* ── Absenden ─────────────────────────────────────────── */}
       <div className="final__footer" style={{ borderTop: '1px solid #eef2f6', paddingTop: '32px', marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
