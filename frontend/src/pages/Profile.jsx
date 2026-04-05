@@ -36,23 +36,19 @@ export default function Profile() {
     }
   }
 
-  const handleFeedbackSubmit = async (orderId) => {
+  const handleFeedbackSubmit = async (orderId, isGeneral = true, dishId = null) => {
     const fb = feedbackState[orderId]
     if (!fb || !fb.comment) return alert('Bitte einen Kommentar eingeben.')
 
     try {
       const token = await currentUser.getIdToken()
-      // Needs a dishId map from the backend ideally, but we can submit with just names if backend accepts, 
-      // or we just submit general feedback for the order for now to keep it robust.
-      // Wait, in this quick version let's submit it as general if we don't have the dish DB id.
-      // Or we fetch dishes to map them. For demo, we submit as general.
       
       const payload = {
         order_id: orderId,
         rating: fb.rating || 5,
         comment: fb.comment,
-        is_general: true, // simplified for demo
-        dish_id: null
+        is_general: isGeneral,
+        dish_id: dishId ? parseInt(dishId) : null
       }
 
       const resp = await fetch(`${API_URL}/api/feedback`, {
@@ -66,7 +62,7 @@ export default function Profile() {
 
       if (resp.ok) {
         alert('Danke! Dein Feedback hilft unserer KI, noch besser zu werden.')
-        setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], comment: '' } }))
+        setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], comment: '', target: 'general' } }))
       }
     } catch (err) {
       console.error(err)
@@ -115,34 +111,71 @@ export default function Profile() {
                   </div>
 
                   {/* Feedback Section */}
-                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontWeight: 700, marginBottom: '8px', fontSize: '0.95rem' }}>🌟 Bewerte diese Bestellung</div>
-                    <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '16px' }}>Dein Feedback wird genutzt, um unsere KI-Empfehlungen für die Zukunft zu verbessern!</p>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <select 
-                        value={feedbackState[order.id]?.rating || 5} 
-                        onChange={e => updateFeedback(order.id, 'rating', parseInt(e.target.value))}
-                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                      >
-                        <option value="5">⭐⭐⭐⭐⭐ Perfekt</option>
-                        <option value="4">⭐⭐⭐⭐ Sehr gut</option>
-                        <option value="3">⭐⭐⭐ Okay</option>
-                        <option value="2">⭐⭐ Nicht so gut</option>
-                        <option value="1">⭐ Schlecht</option>
-                      </select>
-                      <input 
-                        type="text" 
-                        placeholder="Was können wir besser machen? (z.B. Portionen waren riesig!)" 
-                        value={feedbackState[order.id]?.comment || ''}
-                        onChange={e => updateFeedback(order.id, 'comment', e.target.value)}
-                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                      />
-                      <button 
-                        onClick={() => handleFeedbackSubmit(order.id)}
-                        style={{ background: '#037A8B', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
-                      >
-                        Senden
-                      </button>
+                  <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontWeight: 700, marginBottom: '4px', fontSize: '1rem' }}>🌟 Feedback geben</div>
+                    <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '16px' }}>Wähle ein Gericht oder gib allgemeines Feedback zu dieser Bestellung.</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Feedback für:</label>
+                          <select 
+                            value={feedbackState[order.id]?.target || 'general'} 
+                            onChange={e => updateFeedback(order.id, 'target', e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 600 }}
+                          >
+                            <option value="general">🏠 Allgemein (Caterer)</option>
+                            <optgroup label="Gerichte dieser Bestellung">
+                              {Object.entries(menu).map(([key, dish]) => dish && (
+                                <option key={key} value={dish.id || dish.name || dish}>
+                                  🍽️ {dish.name || dish}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Bewertung:</label>
+                          <select 
+                            value={feedbackState[order.id]?.rating || 5} 
+                            onChange={e => updateFeedback(order.id, 'rating', parseInt(e.target.value))}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                          >
+                            <option value="5">⭐⭐⭐⭐⭐ Perfekt</option>
+                            <option value="4">⭐⭐⭐⭐ Sehr gut</option>
+                            <option value="3">⭐⭐⭐ Okay</option>
+                            <option value="2">⭐⭐ Nicht so gut</option>
+                            <option value="1">⭐ Schlecht</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <input 
+                          type="text" 
+                          placeholder={feedbackState[order.id]?.target === 'general' ? "Was hat dir besonders gefallen?" : "Wie hat es geschmeckt?"} 
+                          value={feedbackState[order.id]?.comment || ''}
+                          onChange={e => updateFeedback(order.id, 'comment', e.target.value)}
+                          style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                        />
+                        <button 
+                          onClick={() => {
+                            const target = feedbackState[order.id]?.target || 'general';
+                            const isGeneral = target === 'general';
+                            // Wir finden die dish_id falls möglich
+                            let dishId = null;
+                            if (!isGeneral) {
+                              const dishObj = Object.values(menu).find(d => (d.id || d.name || d) === target);
+                              dishId = dishObj?.csv_id || null;
+                            }
+                            
+                            handleFeedbackSubmit(order.id, isGeneral, dishId);
+                          }}
+                          style={{ background: '#037A8B', color: '#fff', border: 'none', padding: '0 24px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          Senden
+                        </button>
+                      </div>
                     </div>
                   </div>
 
