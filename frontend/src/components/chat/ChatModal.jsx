@@ -67,6 +67,7 @@ export default function ChatModal({ isOpen, onClose }) {
         if (prev.includes(trimmed)) return prev.filter(s => s !== trimmed)
         return [...prev, trimmed]
       })
+      // Keine Nachricht an KI senden, nur UI updaten
       return
     }
 
@@ -74,15 +75,17 @@ export default function ChatModal({ isOpen, onClose }) {
     setQuickReplies([])
 
     const userMsg = { role: 'user', content: trimmed }
-    setMessages(prev => [...prev, userMsg, { role: 'loading', content: '' }])
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     setIsWaiting(true)
+    setMessages(prev => [...prev, { role: 'loading', content: '' }])
 
     try {
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          conversation: [...messages, userMsg], 
+          conversation: updatedMessages, 
           wizardData: wizardData, 
           leadId: leadId,
           context_services: selectedServices 
@@ -93,36 +96,32 @@ export default function ChatModal({ isOpen, onClose }) {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let accumulatedText = ''
+      let fullText = ''
       let isFirstChunk = true
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
-        accumulatedText += chunk
-
+        fullText += chunk
         if (isFirstChunk && chunk.trim()) isFirstChunk = false
 
         // Multi-Message Split beim Streamen
-        const parts = accumulatedText.split('|||').map(p => p.trim()).filter(Boolean)
-
+        const parts = fullText.split('|||').map(p => p.trim()).filter(Boolean)
         setMessages(prev => {
-          const base = prev.filter(m => m.role === 'user' || (m.role === 'model' && !prev.slice(prev.lastIndexOf(m)).some(x => x.role === 'user')))
-          // Wir behalten alle alten Nachrichten bis zur aktuellen User-Message
-          const userIdx = prev.findLastIndex(m => m.role === 'user' && m.content === trimmed)
-          const history = prev.slice(0, userIdx + 1)
-
-          const botMsgs = parts.map(p => ({ role: 'model', content: p }))
-          if (botMsgs.length === 0) botMsgs.push({ role: 'loading', content: '' })
-
-          return [...history, ...botMsgs]
+          const baseMsgs = [...updatedMessages]
+          parts.forEach((p, idx) => {
+             baseMsgs.push({ role: 'model', content: p })
+          })
+          if (isFirstChunk) {
+             baseMsgs.push({ role: 'loading', content: '' })
+          }
+          return baseMsgs
         })
       }
 
-      // JSON Extraktion am Ende
-      const fullText = accumulatedText
       let cleanText = fullText
+
       const verifiedMatch = fullText.match(/\[VERIFIED_JSON\](.*?)\[\/VERIFIED_JSON\]/s)
       const aiMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
 
@@ -157,23 +156,21 @@ export default function ChatModal({ isOpen, onClose }) {
 
       const finalParts = cleanText.split('|||').map(p => p.trim()).filter(Boolean)
       setMessages(prev => {
-        const userIdx = prev.findLastIndex(m => m.role === 'user' && m.content === trimmed)
-        const history = prev.slice(0, userIdx + 1)
-        return [...history, ...finalParts.map(p => ({ role: 'model', content: p }))]
+        const baseMsgs = [...updatedMessages]
+        finalParts.forEach(p => {
+           baseMsgs.push({ role: 'model', content: p })
+        })
+        return baseMsgs
       })
-
     } catch (err) {
-      console.error("Chat Error:", err)
       setMessages(prev => {
-        const last = prev[prev.length - 1]
-        if (last && last.role === 'loading') {
-          return [...prev.slice(0, -1), { role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" }]
-        }
-        return [...prev, { role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" }]
+        const newMsgs = [...prev]
+        // remove loading
+        newMsgs.pop()
+        newMsgs.push({ role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" })
+        return newMsgs
       })
-    } finally {
-      setIsWaiting(false)
-    }
+    } finally { setIsWaiting(false) }
   }, [messages, isWaiting, wizardData, leadId, selectedServices, quickReplies])
   function handleMenuSelect(course, dish) {
     if (course === 'TRIGGER_UPSELL') {
@@ -229,14 +226,12 @@ export default function ChatModal({ isOpen, onClose }) {
     }
   }
 
-  const isMobile = window.innerWidth <= 768
-
   return (
     <>
       {isOpen && <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />}
       
       <div 
-        className={`modal ${step > 1 || isMobile ? 'modal--fullscreen' : ''}`} 
+        className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} 
         style={{ display: isOpen ? 'flex' : 'none' }}
         role="dialog" 
         aria-modal 

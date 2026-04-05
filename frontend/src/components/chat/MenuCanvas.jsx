@@ -54,13 +54,15 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
         )}
       </div>
 
-      <div className="canvas__sections">
+      <div className="canvas__sections" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
         {SECTIONS.map(section => {
           if (section.key === 'hauptspeise2' && !showH2) return null
           
           const selected   = menu[section.key]
           const isConfirmed = confirmed[section.key]
           const hasOptions = (menuOptions[section.key] || []).length > 1
+
+          // Inaktiver Status: Weder ausgewählt noch bestätigt
           const isActive = !!selected
 
           return (
@@ -69,7 +71,10 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
               className={`canvas__section ${isConfirmed ? 'canvas__section--filled' : ''}`}
               style={{ 
                 opacity: isConfirmed ? 1 : (isActive ? 0.9 : 0.5),
+                border: isConfirmed ? '2px solid #037A8B' : (isActive ? '1.5px solid #037A8B' : '1.5px solid #e2e8f0'),
+                background: isConfirmed ? '#f0fdfa' : (isActive ? '#fff' : '#f8fafc'),
                 filter: isActive || isConfirmed ? 'none' : 'grayscale(0.8)',
+                transition: 'all 0.4s ease'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -82,7 +87,6 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                 <button 
                   onClick={() => toggleConfirm(section.key)}
                   disabled={!selected}
-                  className="canvas__confirm-badge"
                   style={{
                     background: isConfirmed ? '#037A8B' : 'transparent',
                     color: isConfirmed ? '#fff' : (selected ? '#037A8B' : '#94a3b8'),
@@ -101,12 +105,12 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
               </div>
 
               {selected && (
-                <div className="canvas__dish-img-container" style={{ marginTop: '12px', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
+                <div style={{ marginTop: '12px', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
                   <DishImage 
                     src={selected.image_url} 
                     alt={selected.name} 
                     category={section.key.includes('hauptspeise') ? 'hauptgericht' : section.key}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ width: '100%', height: '100%' }}
                   />
                 </div>
               )}
