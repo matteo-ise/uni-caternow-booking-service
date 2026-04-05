@@ -19,9 +19,8 @@ services:
         sync: false # Wird via Env Group gesetzt
 
   # Frontend: React / Vite
-  - type: web
+  - type: static
     name: caternow-frontend-prod
-    env: static
     region: frankfurt
     rootDir: frontend
     buildCommand: "npm install && npm run build"

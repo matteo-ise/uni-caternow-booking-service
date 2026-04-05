@@ -142,7 +142,7 @@ export default function Step1Wizard({ onNext, onClose }) {
                 id="companyName"
                 type="text"
                 className="form-field__input"
-                placeholder="z.B. SAP oder sap.com"
+                placeholder="z.B. Acme Co oder acme.co"
                 value={data.companyName}
                 onChange={e => set('companyName', e.target.value)}
               />
