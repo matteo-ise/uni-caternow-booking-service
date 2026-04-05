@@ -48,6 +48,7 @@ async def load_and_embed_dishes(force_refresh=False):
         dishes_to_process = []
         for _, row in df.iterrows():
             try:
+                # Nutze 'id' Spalte (stabil)
                 cid = int(row.get("id", 0))
                 if cid != 0 and cid not in existing_ids:
                     dishes_to_process.append(row)
@@ -57,49 +58,70 @@ async def load_and_embed_dishes(force_refresh=False):
         if not dishes_to_process:
             return
 
+        # Batch Processing für API-Effizienz (10 Gerichte pro Request)
         for i in range(0, len(dishes_to_process), 10):
             batch = dishes_to_process[i:i + 10]
-            names_to_embed = []
+            rich_texts_to_embed = []
             objects_to_add = []
+            
             for row in batch:
                 kat = None
-                if float(row.get("vorspeise", 0)) == 1.0:
-                    kat = "vorspeise"
-                elif float(row.get("hauptgericht", 0)) == 1.0:
-                    kat = "hauptgericht"
-                elif float(row.get("dessert", 0)) == 1.0:
-                    kat = "dessert"
+                if float(row.get("vorspeise", 0)) == 1.0: kat = "vorspeise"
+                elif float(row.get("hauptgericht", 0)) == 1.0: kat = "hauptgericht"
+                elif float(row.get("dessert", 0)) == 1.0: kat = "dessert"
                 
-                if not kat:
-                    continue
+                if not kat: continue
                 
                 name = str(row.get("name", "")).strip()
-                if not name or name == "nan":
-                    continue
+                if not name or name == "nan": continue
                 cid = int(row.get("id", 0))
-                names_to_embed.append(f"{name} ({kat})")
+
+                # --- RICH CONTEXT GENERATION ---
+                # Wir bauen einen "Satz", der alle Attribute beschreibt
+                attributes = []
+                # Boolean-Flags (1 oder 0)
+                for col in ["vegan", "vegetarisch", "kalt", "warm", "schwein", "rind", "geflügel", "halal", "business", "high_class", "leicht_im_magen"]:
+                    if col in row and str(row[col]).strip() == "1":
+                        attributes.append(col)
+                
+                # Scores / Levels (wenn vorhanden)
+                for score_col in ["filling_score", "spiciness", "price_level"]:
+                    if score_col in row and pd.notna(row[score_col]):
+                        attributes.append(f"{score_col}: {row[score_col]}")
+
+                # Optionales Feedback/Keywords Feld
+                extra_info = ""
+                if "ai_keywords" in row and pd.notna(row["ai_keywords"]):
+                    extra_info = f" Keywords: {row['ai_keywords']}."
+
+                rich_description = f"Gericht: {name}. Kategorie: {kat}. Merkmale: {', '.join(attributes)}.{extra_info}"
+                rich_texts_to_embed.append(rich_description)
+                # -------------------------------
                 
                 preis = 15.0
                 try:
                     p = row.get("Preis")
-                    if pd.notna(p):
-                        preis = float(str(p).replace(",", "."))
+                    if pd.notna(p): preis = float(str(p).replace(",", "."))
                 except:
                     pass
 
                 objects_to_add.append(DBDish(
                     csv_id=cid, name=name, kategorie=kat, preis=preis, 
-                    image_url=f"/images/dishes/{cid}.jpg", feedback_context="", tenant_id="default"
+                    image_url=f"/images/dishes/{cid}.jpg", feedback_context=rich_description, tenant_id="default"
                 ))
 
-            if names_to_embed:
+            if rich_texts_to_embed:
                 try:
-                    res = genai.embed_content(model=EMBEDDING_MODEL, content=names_to_embed)
+                    # Wir embedden den RICH CONTEXT, nicht nur den Namen!
+                    res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
                     for idx, vec in enumerate(res["embedding"]):
                         objects_to_add[idx].embedding = vec
                     db.add_all(objects_to_add)
                     db.commit()
-                except:
+                    logger.info(f"Vektorisierte Batch: {len(objects_to_add)} Gerichte.")
+                except Exception as e:
+                    logger.error(f"Embedding API Error: {e}")
+                    # Fallback: Zero-Vektoren (Fuzzy Search übernimmt dann)
                     fake = [0.0] * 3072
                     for o in objects_to_add:
                         o.embedding = fake
