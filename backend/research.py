@@ -78,23 +78,25 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     
     prompt = f"""Recherchiere jetzt aktiv die Firma "{search_target}" über Google Search.
 
+DEINE MISSION: Extrahiere präzise Geschäftsdaten für ein personalisiertes Catering-Angebot.
+
 KRITISCHE AUFGABE – hq_address:
-- Suche explizit im IMPRESSUM der offiziellen Firmenwebsite (z.B. firma.de/impressum, firma.de/legal, firma.de/kontakt)
-- ODER suche nach dem eingetragenen Firmensitz (Registered office, Hauptsitz, Headquarters)
-- Gib NUR die REALE, verifizierbare Postadresse an – EXAKT wie sie im Impressum oder offiziellen Register steht
-- NIEMALS eine erfundene oder Beispieladresse (z.B. "Musterstraße", "Beispielstraße") verwenden
-- Falls keine echte Adresse verifizierbar ist: Setze hq_address auf null
+1. Suche nach der OFFIZIELLEN LADUNGSFÄHIGEN ANSCHRIFT (Headquarters).
+2. Priorität 1: IMPRESSUM der offiziellen Website (z.B. firma.de/impressum, firma.de/legal).
+3. Priorität 2: Offizielles Handelsregister oder "Contact Us" Seite.
+4. Format: "Straße Hausnummer, PLZ Stadt".
+5. VERIFIZIERUNG: Falls keine ECHTE Adresse (z.B. nur eine Postfach-Adresse oder nur eine Stadt ohne Straße) gefunden wird, setze hq_address zwingend auf null. Keine fiktiven Adressen wie "Musterstraße"!
 
 Antworte NUR mit JSON, keine Markdown-Blöcke:
 {{
-  "company_name": "Offizieller Firmenname",
+  "company_name": "Exakter Firmenname laut Impressum",
   "domain": "offizielle-domain.de",
   "core_values": ["Wert1", "Wert2"],
-  "fancy_score": 50,
-  "summary": "Kurze Firmenbeschreibung",
-  "company_colors": ["Primärfarbe"],
+  "fancy_score": 1-100 (wie modern/digital ist der Auftritt?),
+  "summary": "1 Satz Beschreibung",
+  "company_colors": ["Dominante Branding-Farbe als Wort, z.B. Dunkelblau"],
   "slogan": "Offizieller Slogan oder null",
-  "hq_address": "Straße Hausnr, PLZ Ort – aus dem Impressum/Register – oder null"
+  "hq_address": "Straße Hausnr, PLZ Ort (NUR WENN VERIFIZIERT!) oder null"
 }}"""
 
     try:

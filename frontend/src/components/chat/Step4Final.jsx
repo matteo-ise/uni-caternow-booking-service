@@ -105,10 +105,15 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         if (resp.ok) {
           const data = await resp.json()
           setStory(data.story)
-          if (data.hq_address && (address === '' || address.includes('Musterstraße 1'))) {
-            setAddress(data.hq_address)
-            setAddressGlow(true)
-            setTimeout(() => setAddressGlow(false), 2000)
+          if (data.hq_address) {
+            const currentLower = address.trim().toLowerCase();
+            const isPlaceholder = !address || currentLower === '' || currentLower.includes('musterstraße') || currentLower === 'unbekannt' || currentLower === '-';
+            
+            if (isPlaceholder) {
+              setAddress(data.hq_address)
+              setAddressGlow(true)
+              setTimeout(() => setAddressGlow(false), 2000)
+            }
           }
           if (data.logo_url) {
             setLocal(prev => ({ ...prev, companyLogo: data.logo_url }))

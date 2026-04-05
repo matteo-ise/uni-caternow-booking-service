@@ -83,17 +83,17 @@ async def get_checkout_story(req: StoryRequest):
 Basierend auf diesem Lead-Profil:
 {memory}
 
-Schreibe eine persönliche, kulinarische Menü-Story (3-4 Sätze) für die Checkout-Seite.
+Schreibe eine persönliche, kulinarische Menü-Story für die Checkout-Seite.
 
-STRUKTUR:
-1. Eröffne mit einem sinnlichen, kulinarischen Bild – beschreibe konkret Aromen, Texturen oder Zutaten der Gerichte aus dem Profil
-2. Verbinde das Menü mit dem Anlass und/oder der Unternehmensidentität (nutze Firmennamen, Werte oder Event-Art aus dem Profil)
-3. Wecke Vorfreude: Was werden die Gäste erleben? Welches Gefühl soll das Menü hinterlassen?
-4. Herzlicher Abschluss – passend zur Stadt oder zum Anlass
+STRUKTUR & STIL:
+- MAXIMAL 3 SÄTZE. Sei extrem präzise und emotional.
+- NUTZE ABSÄTZE: Füge nach dem ersten oder zweiten Satz einen Doppel-Umbruch (\n\n) ein.
+- BRANDING-FOKUS: Nutze die recherchierten Firmenfarben ({company_color if company_color else 'unsere Premium-Farben'}) oder den Slogan rigeros in der Tonalität oder erwähne sie elegant (z.B. "In euren Vereinsfarben...", "Passend zu eurem Look...").
+- KULINARIK: Beschreibe kurz eine Textur oder einen Geschmack eines gewählten Gerichts.
 
 REGELN:
 - Sprich die Person persönlich an (Du wenn Fancy-Score >70, Sie wenn <70)
-- Erwähne mindestens ein konkretes Gericht oder eine Zutat, falls im Profil vorhanden
+- Erwähne mindestens ein konkretes Gericht oder eine Zutat
 - Ausgabe: NUR den Story-Text, kein JSON, keine Formatierung, keine umschließenden Anführungszeichen
 - Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
 """

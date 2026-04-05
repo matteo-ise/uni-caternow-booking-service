@@ -41,31 +41,18 @@ const DishImage = ({ src, alt, category, style }) => {
     );
   }
 
-  // Level 2: Clean Mockup (SVG)
-  const mockupColors = {
-    vorspeise: '#037A8B',
-    hauptgericht: '#026373',
-    dessert: '#0f172a'
-  };
-  const color = mockupColors[category] || '#037A8B';
-
+  // Level 2: Emoji Fallback (Clean & Minimal)
   return (
     <div style={{ 
       ...style, 
       background: '#f8fafc', 
       display: 'flex', 
-      flexDirection: 'column', 
       alignItems: 'center', 
       justifyContent: 'center',
-      border: `1px solid ${color}20`,
-      color: color
+      fontSize: '2.5rem',
+      color: '#94a3b8'
     }}>
-      <div style={{ fontSize: '2rem', marginBottom: '8px' }}>
-        {category === 'vorspeise' ? '🥗' : category === 'dessert' ? '🍮' : '🍽️'}
-      </div>
-      <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
-        {alt}
-      </div>
+      🍴
     </div>
   );
 };

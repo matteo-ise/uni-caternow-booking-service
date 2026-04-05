@@ -72,7 +72,9 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
                 title={selected ? (isConf ? 'Auswahl bestätigt' : 'Tippen zum Bestätigen') : ''}
               >
                 <span className="canvas-chip__icon">{section.icon}</span>
-                <span className="canvas-chip__label">{section.kpi}</span>
+                <span className="canvas-chip__label">
+                  {selected && !isConf ? '👉 Bestätigen' : section.kpi}
+                </span>
                 <span className="canvas-chip__name">
                   {selected ? selected.name : '—'}
                 </span>
