@@ -26,9 +26,9 @@ export default function HeroSection({ onOpenChat, disabled }) {
             {/* Sponsor Trust Badge */}
             <div className="hero-sponsor-badge">
               <span className="hero-sponsor-label">Powered by</span>
-              <div className="hero-sponsor-box">
+              <a href="https://main-catering.com/" target="_blank" rel="noopener noreferrer" className="hero-sponsor-box">
                 <img src="/maincatering_logo.png" alt="MainCatering Logo" className="hero-sponsor-logo" />
-              </div>
+              </a>
             </div>
           </div>
 
