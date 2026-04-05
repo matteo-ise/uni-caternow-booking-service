@@ -98,93 +98,128 @@ async def load_and_embed_dishes(force_refresh=False):
             except:
                 continue
 
-        if not dishes_to_process:
-            logger.info("No new dishes to process.")
-            return
-
-        for i in range(0, len(dishes_to_process), 10):
-            batch = dishes_to_process[i:i + 10]
-            rich_texts_to_embed = []
-            objects_to_add = []
-            
-            for row in batch:
-                name = str(row.get("productTitle", "")).strip()
-                if not name or name.lower() == "nan": continue
+        if dishes_to_process:
+            for i in range(0, len(dishes_to_process), 10):
+                batch = dishes_to_process[i:i + 10]
+                rich_texts_to_embed = []
+                objects_to_add = []
                 
-                cid = int(row.get("ID", 0))
-                rich_description = build_rich_description(row)
-                rich_texts_to_embed.append(rich_description)
-                
-                kat = "hauptgericht"
-                raw_kat = str(row.get("dishType", "")).lower()
-                if "vorspeise" in raw_kat: kat = "vorspeise"
-                elif "dessert" in raw_kat or "nachtisch" in raw_kat: kat = "dessert"
+                for row in batch:
+                    name = str(row.get("productTitle", "")).strip()
+                    if not name or name.lower() == "nan": continue
+                    
+                    cid = int(row.get("ID", 0))
+                    rich_description = build_rich_description(row)
+                    rich_texts_to_embed.append(rich_description)
+                    
+                    kat = "hauptgericht"
+                    raw_kat = str(row.get("dishType", "")).lower()
+                    if "vorspeise" in raw_kat: kat = "vorspeise"
+                    elif "dessert" in raw_kat or "nachtisch" in raw_kat: kat = "dessert"
 
-                def to_float(val, default=0.5):
-                    try:
-                        return float(val) if pd.notna(val) else default
-                    except: return default
+                    def to_float(val, default=0.5):
+                        try:
+                            return float(val) if pd.notna(val) else default
+                        except: return default
 
-                def to_bool(val, default=False):
-                    if pd.isna(val): return default
-                    s = str(val).lower().strip()
-                    return s in ["1", "1.0", "true", "ja", "yes"]
+                    def to_bool(val, default=False):
+                        if pd.isna(val): return default
+                        s = str(val).lower().strip()
+                        return s in ["1", "1.0", "true", "ja", "yes"]
 
-                objects_to_add.append(DBDish(
-                    csv_id=cid, 
-                    name=name, 
-                    description=str(row.get("productDescription")).strip() if pd.notna(row.get("productDescription")) else None,
-                    kategorie=kat, 
-                    dish_type=str(row.get("dishType")).strip() if pd.notna(row.get("dishType")) else None,
-                    diet=str(row.get("diet")).strip() if pd.notna(row.get("diet")) else None,
-                    preis=to_float(row.get("priceNet"), 15.0), 
-                    allergenes=str(row.get("allergenes")).strip() if pd.notna(row.get("allergenes")) else None,
-                    additives=str(row.get("additives")).strip() if pd.notna(row.get("additives")) else None,
-                    kitchen=str(row.get("kitchen")).strip() if pd.notna(row.get("kitchen")) else None,
-                    fancy_score=to_float(row.get("fancy_score")),
-                    heavy_score=to_float(row.get("heavy_score")),
-                    filling_score=to_float(row.get("filling_score")),
-                    traditional_score=to_float(row.get("traditional_score")),
-                    spicy_score=to_float(row.get("spicy_score"), 0.0),
-                    is_fingerfood=to_bool(row.get("eignung_fingerfood"), False),
-                    is_buffet=to_bool(row.get("eignung_buffet"), True),
-                    popularity=to_float(row.get("beliebheit")),
-                    image_url=f"/images/dishes/{cid}.jpeg", 
-                    feedback_context=rich_description, 
-                    tenant_id="default"
-                ))
+                    objects_to_add.append(DBDish(
+                        csv_id=cid, 
+                        name=name, 
+                        description=str(row.get("productDescription")).strip() if pd.notna(row.get("productDescription")) else None,
+                        kategorie=kat, 
+                        dish_type=str(row.get("dishType")).strip() if pd.notna(row.get("dishType")) else None,
+                        diet=str(row.get("diet")).strip() if pd.notna(row.get("diet")) else None,
+                        preis=to_float(row.get("priceNet"), 15.0), 
+                        allergenes=str(row.get("allergenes")).strip() if pd.notna(row.get("allergenes")) else None,
+                        additives=str(row.get("additives")).strip() if pd.notna(row.get("additives")) else None,
+                        kitchen=str(row.get("kitchen")).strip() if pd.notna(row.get("kitchen")) else None,
+                        fancy_score=to_float(row.get("fancy_score")),
+                        heavy_score=to_float(row.get("heavy_score")),
+                        filling_score=to_float(row.get("filling_score")),
+                        traditional_score=to_float(row.get("traditional_score")),
+                        spicy_score=to_float(row.get("spicy_score"), 0.0),
+                        is_fingerfood=to_bool(row.get("eignung_fingerfood"), False),
+                        is_buffet=to_bool(row.get("eignung_buffet"), True),
+                        popularity=to_float(row.get("beliebheit")),
+                        image_url=f"/images/dishes/{cid}.jpeg", 
+                        feedback_context=rich_description, 
+                        tenant_id="default"
+                    ))
 
-            if rich_texts_to_embed:
-                for attempt in range(3):
-                    try:
-                        res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
-                        for idx, vec in enumerate(res["embedding"]):
-                            objects_to_add[idx].embedding = vec
-                        db.add_all(objects_to_add)
-                        db.commit()
-                        logger.info(f"Vektorisierte Batch ({i//10 + 1}): {len(objects_to_add)} Gerichte.")
-                        await asyncio.sleep(1.2)
-                        break
-                    except Exception as e:
-                        db.rollback() # Always rollback on error to clean transaction state
-                        if "429" in str(e) and attempt < 2:
-                            wait_time = 45 * (attempt + 1)
-                            logger.warning(f"Quota exceeded. Waiting {wait_time}s... (Attempt {attempt+1})")
-                            await asyncio.sleep(wait_time)
-                        else:
-                            logger.error(f"Batch Error: {e}")
-                            # Final fallback: zero vectors
-                            fake = [0.0] * 3072
-                            for o in objects_to_add:
-                                o.embedding = fake
-                            db.add_all(objects_to_add)
-                            db.commit()
-                            break
+                if rich_texts_to_embed:
+                    await process_embedding_batch(db, objects_to_add, rich_texts_to_embed, i)
+
+        # PART 2: Fix existing zero vectors
+        await fix_zero_vectors(db)
+
     except Exception as e:
         logger.error(f"Sync Global Error: {e}")
         db.rollback()
     finally:
         db.close()
+
+async def process_embedding_batch(db, objects_to_add, rich_texts_to_embed, batch_idx):
+    for attempt in range(3):
+        try:
+            res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
+            for idx, vec in enumerate(res["embedding"]):
+                objects_to_add[idx].embedding = vec
+            db.add_all(objects_to_add)
+            db.commit()
+            logger.info(f"Vektorisierte Batch ({batch_idx//10 + 1}): {len(objects_to_add)} Gerichte.")
+            await asyncio.sleep(2.0)
+            break
+        except Exception as e:
+            db.rollback()
+            if "429" in str(e) and attempt < 2:
+                wait_time = 60 * (attempt + 1)
+                logger.warning(f"Quota exceeded. Waiting {wait_time}s... (Attempt {attempt+1})")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"Batch Error: {e}")
+                fake = [0.0] * 3072
+                for o in objects_to_add:
+                    o.embedding = fake
+                db.add_all(objects_to_add)
+                db.commit()
+                break
+
+async def fix_zero_vectors(db):
+    """Finds dishes with zero vectors and tries to re-embed them."""
+    # We check if first element is 0 as a proxy for zero vector (very likely for our fake vector)
+    zero_dishes = db.query(DBDish).all()
+    to_fix = []
+    for d in zero_dishes:
+        if d.embedding is not None:
+            # Check if it's an all-zero vector
+            if all(v == 0.0 for v in d.embedding[:10]): # Check first 10 for speed
+                 to_fix.append(d)
+    
+    if not to_fix:
+        return
+
+    logger.info(f"Found {len(to_fix)} dishes with zero vectors. Fixing...")
+    
+    for i in range(0, len(to_fix), 5): # Small batches of 5
+        batch = to_fix[i:i+5]
+        rich_texts = [build_rich_description(d) for d in batch]
+        
+        try:
+            res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts)
+            for idx, vec in enumerate(res["embedding"]):
+                batch[idx].embedding = vec
+            db.commit()
+            logger.info(f"Fixed {len(batch)} zero vectors.")
+            await asyncio.sleep(5.0) # Slow and steady
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Stop fixing zero vectors for now: {e}")
+            break
 
 def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3) -> list[Dish]:
     db = SessionLocal()

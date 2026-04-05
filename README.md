@@ -10,7 +10,7 @@
 
 ## ✨ Executive Summary for Investors
 
-### 🧠 The Brain: "Chatty"
+### 🧠 The Brain: "CaterNow Chat"
 Our AI agent is a world-class salesperson.
 - **Research Intelligence:** Automatically analyzes B2B leads via their domain to extract values and headquarters addresses.
 - **Explainable AI (XAI):** Displays a mathematical "AI Match %" for every recommendation to build user trust.

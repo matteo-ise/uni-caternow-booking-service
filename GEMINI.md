@@ -1,7 +1,7 @@
 # CaterNow SaaS: Comprehensive Project Documentation
 
 ## 🚀 Project Overview
-CaterNow is a high-end AI-powered B2B/B2C SaaS platform for catering booking. It features a charming, sales-optimized AI agent ("Chatty") that guides users through a personalized menu creation process using Retrieval-Augmented Generation (RAG) and real-time research intelligence.
+CaterNow is a high-end AI-powered B2B/B2C SaaS platform for catering booking. It features a charming, sales-optimized AI agent ("CaterNow Chat") that guides users through a personalized menu creation process using Retrieval-Augmented Generation (RAG) and real-time research intelligence.
 
 ### Core Philosophy
 - **Explainable AI (XAI):** Mathematical transparency for users via "AI Match %".
