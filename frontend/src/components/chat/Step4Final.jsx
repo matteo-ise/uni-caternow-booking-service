@@ -43,6 +43,7 @@ function Accordion({ title, children, defaultOpen = false }) {
 export default function Step4Final({ menu, selectedServices, wizardData, onSubmit, userEmail, userName, leadId }) {
   const [editing, setEditing] = useState(false)
   const [local, setLocal]     = useState({ ...wizardData })
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Delivery Setup State
   const [withSetup, setWithSetup] = useState(true)
@@ -123,9 +124,12 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
     ? new Date(display.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
     : '–'
   
-  const canSubmit = email.trim() !== '' && address.trim() !== '' && name.trim() !== '' && !editing
+  const canSubmit = email.trim() !== '' && address.trim() !== '' && name.trim() !== '' && !editing && !isSubmitting
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
     const finalData = {
       ...display,
       name,
@@ -135,7 +139,15 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       totalPrice: priceStats.total,
       deliveryWithSetup: withSetup
     }
-    onSubmit(finalData)
+    
+    try {
+      await onSubmit(finalData)
+    } catch (err) {
+      console.error(err)
+      // Wir setzen isSubmitting nur zurück wenn es fehlgeschlagen ist, 
+      // damit der User es nochmal probieren kann.
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -372,6 +384,17 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       </div>
 
       <style jsx>{`
+        .loading-spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
         .pulsing-egg {
           animation: egg-float 3s infinite ease-in-out;
         }
@@ -388,9 +411,22 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
           className={`btn-filled btn-filled--lg ${!canSubmit ? 'btn-disabled' : ''}`} 
           onClick={handleFinalSubmit} 
           disabled={!canSubmit} 
-          style={{ width: 'auto', padding: '16px 48px', opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
+          style={{ 
+            width: 'auto', 
+            padding: '16px 48px', 
+            opacity: canSubmit ? 1 : 0.5, 
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
+            minWidth: '280px'
+          }}
         >
-          Jetzt verbindlich anfragen für {priceStats.total.toFixed(2)} € →
+          {isSubmitting ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+              <span className="loading-spinner"></span>
+              Anfrage wird gesendet...
+            </span>
+          ) : (
+            `Jetzt verbindlich anfragen für ${priceStats.total.toFixed(2)} € →`
+          )}
         </button>
       </div>
     </div>

@@ -44,7 +44,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             # Wir "vertrauen" dem Token hier lokal für die Demo, falls verify_id_token blockt
             import jwt # Falls installiert
             decoded = jwt.decode(token, options={"verify_signature": False})
-            print(f"[Auth Fallback] Nutze unbestätigtes Token für User: {decoded.get('email')}")
+            
+            # WICHTIG: Firebase Tokens nutzen 'sub' als UID. Wir mappen das auf 'uid', 
+            # damit das restliche System konsistent bleibt.
+            if "sub" in decoded and "uid" not in decoded:
+                decoded["uid"] = decoded["sub"]
+                
+            print(f"[Auth Fallback] Nutze unbestätigtes Token für User: {decoded.get('email')} (UID: {decoded.get('uid')})")
             return decoded
         except:
             raise HTTPException(
