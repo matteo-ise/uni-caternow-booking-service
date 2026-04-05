@@ -26,9 +26,19 @@ async def load_and_embed_dishes(force_refresh=False):
         if not os.path.exists(DATA_PATH):
             return
         try:
-            df = pd.read_csv(DATA_PATH, sep=";", encoding="latin-1")
+            # Versuche zuerst UTF-8 mit BOM (Excel Standard)
+            df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8-sig")
         except:
-            df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8", errors="replace")
+            try:
+                # Versuche MacRoman (Häufiger auf macOS / 0x9f deutet darauf hin)
+                df = pd.read_csv(DATA_PATH, sep=";", encoding="mac_roman")
+            except:
+                try:
+                    # Versuche CP1252 (Deutscher Standard / Latin-1)
+                    df = pd.read_csv(DATA_PATH, sep=";", encoding="cp1252")
+                except:
+                    # Letzter Ausweg (UTF-8 ohne BOM)
+                    df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8")
         
         if force_refresh:
             db.query(DBDish).delete()
