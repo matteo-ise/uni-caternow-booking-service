@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
 const BUDGET_OPTIONS = [
-  { value: 'economy',  label: 'Economy  –  10–30 € / Person' },
-  { value: 'standard', label: 'Standard  –  30–60 € / Person' },
-  { value: 'premium',  label: 'Premium  –  60 € + / Person'  },
+  { value: 'economy',  label: 'Economy  -  10-30 € / Person' },
+  { value: 'standard', label: 'Standard  -  30-60 € / Person' },
+  { value: 'premium',  label: 'Premium  -  60 € + / Person'  },
 ]
 
 export default function Step1Wizard({ onNext, onClose }) {
@@ -78,10 +78,11 @@ export default function Step1Wizard({ onNext, onClose }) {
             <input
               id="date"
               type="date"
-              className="form-field__input"
+              className="form-field__input date-input-apple"
               min={new Date().toISOString().split('T')[0]}
               value={data.date}
               onChange={e => set('date', e.target.value)}
+              onClick={(e) => { try { e.target.showPicker(); } catch(err) {} }}
               required
             />
           </div>
@@ -142,7 +143,7 @@ export default function Step1Wizard({ onNext, onClose }) {
                 id="companyName"
                 type="text"
                 className="form-field__input"
-                placeholder="z.B. SAP oder sap.com"
+                placeholder="z.B. Acme Co oder acme.co"
                 value={data.companyName}
                 onChange={e => set('companyName', e.target.value)}
               />

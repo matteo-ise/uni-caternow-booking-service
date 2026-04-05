@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import logo from '../assets/caternow-logo.svg'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
 
 export default function Navbar() {
   const { currentUser, loginWithGoogle, logout } = useAuth()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   return (
     <nav className="nav">
@@ -16,11 +18,11 @@ export default function Navbar() {
           </div>
         </Link>
 
-        <ul className="nav-links">
-          <li><a href="#wie-es-funktioniert">So funktioniert's</a></li>
-          <li><a href="#leistungen">Leistungen</a></li>
-          <li><a href="#faq">FAQ</a></li>
-          <li><a href="#kontakt">Kontakt</a></li>
+        <ul className={`nav-links ${isMenuOpen ? 'nav-links--open' : ''}`}>
+          <li><a href="#wie-es-funktioniert" onClick={() => setIsMenuOpen(false)}>So funktioniert's</a></li>
+          <li><a href="#leistungen" onClick={() => setIsMenuOpen(false)}>Leistungen</a></li>
+          <li><a href="#faq" onClick={() => setIsMenuOpen(false)}>FAQ</a></li>
+          <li><a href="#kontakt" onClick={() => setIsMenuOpen(false)}>Kontakt</a></li>
         </ul>
       </div>
 
@@ -50,6 +52,16 @@ export default function Navbar() {
             Login
           </button>
         )}
+        
+        <button 
+          className={`nav-mobile-toggle ${isMenuOpen ? 'nav-mobile-toggle--open' : ''}`} 
+          onClick={() => setIsMenuOpen(!isMenuOpen)} 
+          aria-label="Menü öffnen"
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
       </div>
     </nav>
   )

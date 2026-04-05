@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 
 const BUSINESS_EVENTS = [
   { id: 'Firmenfeier', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=400&q=80' },
@@ -32,7 +33,10 @@ export default function ChatPanel({
   selectedServices = [],
   step
 }) {
+  const { currentUser } = useAuth()
   const bottomRef = useRef(null)
+
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -41,6 +45,7 @@ export default function ChatPanel({
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
+      setHasInteracted(true)
       if (isEventSelection) {
         onEventSelect(inputValue)
       } else {
@@ -52,6 +57,7 @@ export default function ChatPanel({
   const handleHotkeyClick = (text) => {
     const current = inputValue.trim();
     onInput(current ? `${current} ${text}` : text);
+    setHasInteracted(true);
   }
 
   const SMART_HOTKEYS = [
@@ -59,29 +65,40 @@ export default function ChatPanel({
     "etwas frisches/fruchtiges 🍓",
     "mit viel Protein 💪",
     "vegane Optionen 🌱",
-    "Fingerfood 🍢"
+    "Fingerfood 🍢",
+    "italienischer Abend 🇮🇹"
   ];
 
   const currentEventCards = customerType === 'business' ? BUSINESS_EVENTS : PRIVATE_EVENTS
+  const isInitialState = isEventSelection && messages.length <= 1;
 
   return (
-    <div className="chat-panel">
+    <div className={`chat-panel ${isInitialState ? 'chat-panel--centered' : ''}`}>
       {/* Nachrichtenverlauf */}
       <div className="chat-panel__messages">
         {messages.map((msg, i) => {
           if (msg.role === 'loading') {
             return (
               <div key={i} className="msg msg--loading">
-                <span /><span /><span />
+                <span></span><span></span><span></span>
               </div>
             )
           }
+          const isBot = msg.role === 'bot'
           return (
             <div key={i} className={`msg msg--${msg.role}`}>
-              {msg.role === 'bot' && (
-                <div className="msg__avatar">C</div>
-              )}
-              <div className="msg__bubble">{msg.text}</div>
+              <div className={`msg__avatar ${isBot ? 'msg__avatar--bot' : 'msg__avatar--user'}`}>
+                {isBot ? (
+                  <img src="/favicon.svg" alt="CaterNow" />
+                ) : (
+                  currentUser?.photoURL ? (
+                    <img src={currentUser.photoURL} alt="User" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span>{currentUser?.displayName?.charAt(0).toUpperCase() || '👤'}</span>
+                  )
+                )}
+              </div>
+              <div className="msg__bubble">{msg.text || ''}</div>
             </div>
           )
         })}
@@ -94,13 +111,13 @@ export default function ChatPanel({
             </div>
             <div className="event-cards-grid">
               {currentEventCards.map(ev => (
-                <div key={ev.id} className="event-card" onClick={() => onEventSelect(ev.id)}>
+                <div key={ev.id} className="event-card" onClick={() => { setHasInteracted(true); onEventSelect(ev.id); }}>
                   <img 
                     src={ev.img} 
                     alt={ev.id} 
                     onError={(e) => {
                       e.target.onerror = null; 
-                      e.target.src="https://images.unsplash.com/photo-1495191746160-713f09762446?auto=format&fit=crop&w=400&q=80" // Generic Fallback
+                      e.target.src="https://images.unsplash.com/photo-1495191746160-713f09762446?auto=format&fit=crop&w=400&q=80"
                     }}
                   />
                   <div className="event-card-overlay"><span className="event-card-title">{ev.id}</span></div>
@@ -112,69 +129,72 @@ export default function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      {/* SMART HOTKEYS */}
-      {!isEventSelection && (
-        <div className="chat-panel__chips" style={{ paddingBottom: '4px', gap: '6px', borderTop: 'none', marginTop: '0' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginRight: '4px' }}>Inspiration:</span>
-          {SMART_HOTKEYS.map(hk => (
-            <button
-              key={hk}
-              className="chip chip--outline"
-              onClick={() => handleHotkeyClick(hk)}
-              disabled={isWaiting}
-              style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1' }}
-            >
-              {hk}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={`chat-panel__input-area ${isInitialState ? 'input-area--hero' : ''}`}>
+        {/* SMART HOTKEYS */}
+        {!isEventSelection && (
+          <div className="chat-panel__hotkeys-wrapper">
+            <div className="hotkeys-scroll">
+              <span className="hotkeys-label">Inspiration:</span>
+              {SMART_HOTKEYS.map(hk => (
+                <button
+                  key={hk}
+                  className="hotkey-chip"
+                  onClick={() => handleHotkeyClick(hk)}
+                  disabled={isWaiting}
+                >
+                  {hk}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* Quick-Reply Buttons */}
-      {quickReplies.length > 0 && !isEventSelection && (
-        <div className="chat-panel__chips">
-          {quickReplies.map(reply => {
-            const isSelected = step === 3 && selectedServices.includes(reply);
-            return (
-              <button
-                key={reply}
-                className={`chip ${isSelected ? 'chip--active' : ''}`}
-                onClick={() => onQuickReply(reply)}
-                disabled={isWaiting}
-                style={isSelected ? { background: '#037A8B', color: '#fff', border: '1px solid #037A8B' } : {}}
-              >
-                {isSelected && '✓ '}{reply}
-              </button>
-            )
-          })}
-        </div>
-      )}
+        {/* Quick-Reply Buttons */}
+        {quickReplies.length > 0 && !isEventSelection && (
+          <div className="chat-panel__chips">
+            {quickReplies.map(reply => {
+              const isSelected = step === 3 && selectedServices.includes(reply);
+              return (
+                <button
+                  key={reply}
+                  className={`chip ${isSelected ? 'chip--active' : ''}`}
+                  onClick={() => onQuickReply(reply)}
+                  disabled={isWaiting}
+                  style={isSelected ? { background: '#037A8B', color: '#fff', border: '1px solid #037A8B' } : {}}
+                >
+                  {isSelected && '✓ '}{reply}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-      {/* Eingabezeile */}
-      <div className="chat-panel__input-row">
-        <input
-          type="text"
-          className={`chat-panel__input ${isGlow ? 'input-glow' : ''}`}
-          placeholder={isEventSelection ? "Anlass eingeben oder Karte wählen…" : "Nachricht schreiben…"}
-          value={inputValue}
-          onChange={e => onInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isWaiting}
-          maxLength={500}
-          autoComplete="off"
-        />
-        <button
-          className="chat-panel__send"
-          onClick={() => isEventSelection ? onEventSelect(inputValue) : onSend(inputValue)}
-          disabled={isWaiting || !inputValue.trim()}
-          aria-label="Senden"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" strokeWidth="2.2">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
+        {/* Eingabezeile */}
+        <div className="chat-panel__input-row">
+          <input
+            type="text"
+            className={`chat-panel__input ${isGlow ? 'input-glow' : ''}`}
+            placeholder={isEventSelection ? "Eigenen Anlass eingeben..." : "Wünsche beschreiben..."}
+            value={inputValue}
+            onChange={e => onInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isWaiting}
+            maxLength={500}
+            autoComplete="off"
+          />
+          <button
+            className={`chat-panel__send ${inputValue.trim() && !isWaiting ? 'chat-panel__send--pulse' : ''}`}
+            onClick={() => { setHasInteracted(true); isEventSelection ? onEventSelect(inputValue) : onSend(inputValue); }}
+            disabled={isWaiting || !inputValue.trim()}
+            aria-label="Senden"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" strokeWidth="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   )

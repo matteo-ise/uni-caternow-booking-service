@@ -80,11 +80,26 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
     uid = decoded_token.get("uid")
     email = decoded_token.get("email")
     name = decoded_token.get("name", "")
+    
+    # 1. Suche nach UID
     user = db.query(DBUser).filter(DBUser.firebase_uid == uid).first()
+    
+    # 2. Falls nicht gefunden, suche nach Email (verhindert UniqueViolation)
+    if not user and email:
+        user = db.query(DBUser).filter(DBUser.email == email).first()
+        if user:
+            user.firebase_uid = uid # Update UID falls sie sich geändert hat
+            db.commit()
+
     if not user:
         user = DBUser(firebase_uid=uid, email=email, name=name)
         db.add(user)
-        db.commit()
+        try:
+            db.commit()
+        except:
+            db.rollback()
+            user = db.query(DBUser).filter(DBUser.email == email).first()
+        
         db.refresh(user)
         return {"status": "created", "user_id": user.id}
     else:

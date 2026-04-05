@@ -59,3 +59,10 @@ class DBSyncState(Base):
     id = Column(Integer, primary_key=True)
     csv_hash = Column(String, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class DBUsageStats(Base):
+    __tablename__ = "usage_stats"
+    id = Column(Integer, primary_key=True)
+    feature = Column(String, unique=True, index=True) # e.g. "google_search"
+    count = Column(Integer, default=0)
+    last_reset = Column(DateTime(timezone=True), server_default=func.now())

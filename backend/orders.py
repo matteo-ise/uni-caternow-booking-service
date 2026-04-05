@@ -79,14 +79,27 @@ async def submit_order(order: OrderSubmit, db: Session = Depends(get_db), curren
         email = current_user.get("email")
         name = current_user.get("name", "")
         
-        # Check if user exists, otherwise create on the fly
+        # Check by UID
         user = db.query(DBUser).filter(DBUser.firebase_uid == uid).first()
+        
+        # Check by Email if not found (prevents crash on duplicate email)
+        if not user and email:
+            user = db.query(DBUser).filter(DBUser.email == email).first()
+            if user:
+                user.firebase_uid = uid
+                db.commit()
+
         if not user and email:
             user = DBUser(firebase_uid=uid, email=email, name=name)
             db.add(user)
-            db.commit()
-            db.refresh(user)
-            print(f"[Orders] User {email} created on-the-fly during order.")
+            try:
+                db.commit()
+                db.refresh(user)
+            except:
+                db.rollback()
+                user = db.query(DBUser).filter(DBUser.email == email).first()
+            
+            print(f"[Orders] User {email} handled during order.")
         
         if user:
             user_id = user.id
