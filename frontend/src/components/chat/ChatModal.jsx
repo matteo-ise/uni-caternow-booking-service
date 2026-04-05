@@ -67,7 +67,6 @@ export default function ChatModal({ isOpen, onClose }) {
         if (prev.includes(trimmed)) return prev.filter(s => s !== trimmed)
         return [...prev, trimmed]
       })
-      // Keine Nachricht an KI senden, nur UI updaten
       return
     }
 
@@ -75,17 +74,15 @@ export default function ChatModal({ isOpen, onClose }) {
     setQuickReplies([])
 
     const userMsg = { role: 'user', content: trimmed }
-    const updatedMessages = [...messages, userMsg]
-    setMessages(updatedMessages)
+    setMessages(prev => [...prev, userMsg, { role: 'loading', content: '' }])
     setIsWaiting(true)
-    setMessages(prev => [...prev, { role: 'loading', content: '' }])
 
     try {
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          conversation: updatedMessages, 
+          conversation: [...messages, userMsg], 
           wizardData: wizardData, 
           leadId: leadId,
           context_services: selectedServices 
@@ -96,32 +93,36 @@ export default function ChatModal({ isOpen, onClose }) {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let fullText = ''
+      let accumulatedText = ''
       let isFirstChunk = true
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
-        fullText += chunk
+        accumulatedText += chunk
+
         if (isFirstChunk && chunk.trim()) isFirstChunk = false
 
         // Multi-Message Split beim Streamen
-        const parts = fullText.split('|||').map(p => p.trim()).filter(Boolean)
+        const parts = accumulatedText.split('|||').map(p => p.trim()).filter(Boolean)
+
         setMessages(prev => {
-          const baseMsgs = [...updatedMessages]
-          parts.forEach((p, idx) => {
-             baseMsgs.push({ role: 'model', content: p })
-          })
-          if (isFirstChunk) {
-             baseMsgs.push({ role: 'loading', content: '' })
-          }
-          return baseMsgs
+          const base = prev.filter(m => m.role === 'user' || (m.role === 'model' && !prev.slice(prev.lastIndexOf(m)).some(x => x.role === 'user')))
+          // Wir behalten alle alten Nachrichten bis zur aktuellen User-Message
+          const userIdx = prev.findLastIndex(m => m.role === 'user' && m.content === trimmed)
+          const history = prev.slice(0, userIdx + 1)
+
+          const botMsgs = parts.map(p => ({ role: 'model', content: p }))
+          if (botMsgs.length === 0) botMsgs.push({ role: 'loading', content: '' })
+
+          return [...history, ...botMsgs]
         })
       }
 
+      // JSON Extraktion am Ende
+      const fullText = accumulatedText
       let cleanText = fullText
-
       const verifiedMatch = fullText.match(/\[VERIFIED_JSON\](.*?)\[\/VERIFIED_JSON\]/s)
       const aiMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
 
@@ -156,21 +157,23 @@ export default function ChatModal({ isOpen, onClose }) {
 
       const finalParts = cleanText.split('|||').map(p => p.trim()).filter(Boolean)
       setMessages(prev => {
-        const baseMsgs = [...updatedMessages]
-        finalParts.forEach(p => {
-           baseMsgs.push({ role: 'model', content: p })
-        })
-        return baseMsgs
+        const userIdx = prev.findLastIndex(m => m.role === 'user' && m.content === trimmed)
+        const history = prev.slice(0, userIdx + 1)
+        return [...history, ...finalParts.map(p => ({ role: 'model', content: p }))]
       })
+
     } catch (err) {
+      console.error("Chat Error:", err)
       setMessages(prev => {
-        const newMsgs = [...prev]
-        // remove loading
-        newMsgs.pop()
-        newMsgs.push({ role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" })
-        return newMsgs
+        const last = prev[prev.length - 1]
+        if (last && last.role === 'loading') {
+          return [...prev.slice(0, -1), { role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" }]
+        }
+        return [...prev, { role: 'model', content: "Ups, da hat die Verbindung kurz gewackelt. 😉" }]
       })
-    } finally { setIsWaiting(false) }
+    } finally {
+      setIsWaiting(false)
+    }
   }, [messages, isWaiting, wizardData, leadId, selectedServices, quickReplies])
   function handleMenuSelect(course, dish) {
     if (course === 'TRIGGER_UPSELL') {

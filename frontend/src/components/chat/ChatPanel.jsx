@@ -87,7 +87,7 @@ export default function ChatPanel({
               {msg.role === 'bot' && (
                 <div className="msg__avatar">C</div>
               )}
-              <div className="msg__bubble">{msg.text}</div>
+              <div className="msg__bubble">{msg.text || ''}</div>
             </div>
           )
         })}

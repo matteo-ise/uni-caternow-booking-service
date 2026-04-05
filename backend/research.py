@@ -30,7 +30,7 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
 
     # Nutze das stärkere Modell mit Search Grounding
     model = genai.GenerativeModel(
-        "models/gemini-2.0-flash", # Stabilere Version für Tools
+        "models/gemini-1.5-flash-latest", 
         tools=[{"google_search_retrieval": {}}] 
     )
     
