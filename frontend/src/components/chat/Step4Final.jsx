@@ -392,7 +392,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         </p>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .loading-spinner {
           width: 18px;
           height: 18px;

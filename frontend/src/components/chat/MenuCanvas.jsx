@@ -187,7 +187,7 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .nav-btn {
           background: #f1f5f9;
           border: none;

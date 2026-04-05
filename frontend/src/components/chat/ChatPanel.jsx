@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 
 const BUSINESS_EVENTS = [
   { id: 'Firmenfeier', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=400&q=80' },
@@ -32,6 +33,7 @@ export default function ChatPanel({
   selectedServices = [],
   step
 }) {
+  const { currentUser } = useAuth()
   const bottomRef = useRef(null)
 
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -78,16 +80,25 @@ export default function ChatPanel({
           if (msg.role === 'loading') {
             return (
               <div key={i} className="msg msg--loading">
-                <span /><span /><span />
+                <span></span><span></span><span></span>
               </div>
             )
           }
+          const isBot = msg.role === 'bot'
           return (
             <div key={i} className={`msg msg--${msg.role}`}>
-              {msg.role === 'bot' && (
-                <div className="msg__avatar" style={{ background: 'linear-gradient(135deg, #037A8B, #026373)', fontSize: '1rem' }}>🤖</div>
-              )}
-              <div className="msg__bubble" style={{ whiteSpace: 'pre-wrap' }}>{msg.text || ''}</div>
+              <div className={`msg__avatar ${isBot ? 'msg__avatar--bot' : 'msg__avatar--user'}`}>
+                {isBot ? (
+                  <img src="/favicon.svg" alt="CaterNow" />
+                ) : (
+                  currentUser?.photoURL ? (
+                    <img src={currentUser.photoURL} alt="User" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span>{currentUser?.displayName?.charAt(0).toUpperCase() || '👤'}</span>
+                  )
+                )}
+              </div>
+              <div className="msg__bubble">{msg.text || ''}</div>
             </div>
           )
         })}
