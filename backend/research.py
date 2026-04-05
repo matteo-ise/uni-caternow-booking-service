@@ -30,8 +30,8 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
 
     # Nutze das stärkere Modell mit Search Grounding
     model = genai.GenerativeModel(
-        "models/gemini-2.5-flash",
-        tools=[{"google_search": {}}]
+        "models/gemini-2.0-flash", # Stabilere Version für Tools
+        tools=[{"google_search_retrieval": {}}] 
     )
     
     prompt = f"""Analysiere die Firma "{search_target}". Antworte NUR mit JSON, keine Markdown Blöcke. Formatiere strikt als:

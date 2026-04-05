@@ -26,7 +26,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
 router = APIRouter()
-GEMINI_MODEL = "models/gemini-2.5-flash"
+GEMINI_MODEL = "models/gemini-2.0-flash"
 
 BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der charmanteste Menü-Verkäufer der Welt.
 
@@ -109,7 +109,7 @@ async def chat(request: ChatRequest):
             model = genai.GenerativeModel(
                 model_name=GEMINI_MODEL, 
                 system_instruction=system_prompt + "\n\n" + dishes_context,
-                tools=[{"google_search": {}}]
+                tools=[{"google_search_retrieval": {}}]
             )
             history = [{"role": m.role, "parts": [m.content]} for m in conversation[:-1]]
             chat_session = model.start_chat(history=history)
