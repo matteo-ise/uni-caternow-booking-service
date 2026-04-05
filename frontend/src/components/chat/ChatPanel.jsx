@@ -28,7 +28,9 @@ export default function ChatPanel({
   isEventSelection,
   onEventSelect,
   isGlow,
-  customerType // New prop
+  customerType,
+  selectedServices = [],
+  step
 }) {
   const bottomRef = useRef(null)
 
@@ -46,6 +48,19 @@ export default function ChatPanel({
       }
     }
   }
+
+  const handleHotkeyClick = (text) => {
+    const current = inputValue.trim();
+    onInput(current ? `${current} ${text}` : text);
+  }
+
+  const SMART_HOTKEYS = [
+    "etwas leichtes sommerliches ☀️",
+    "etwas frisches/fruchtiges 🍓",
+    "mit viel Protein 💪",
+    "vegane Optionen 🌱",
+    "Fingerfood 🍢"
+  ];
 
   const currentEventCards = customerType === 'business' ? BUSINESS_EVENTS : PRIVATE_EVENTS
 
@@ -97,19 +112,41 @@ export default function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
+      {/* SMART HOTKEYS */}
+      {!isEventSelection && (
+        <div className="chat-panel__chips" style={{ paddingBottom: '4px', gap: '6px', borderTop: 'none', marginTop: '0' }}>
+          <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginRight: '4px' }}>Inspiration:</span>
+          {SMART_HOTKEYS.map(hk => (
+            <button
+              key={hk}
+              className="chip chip--outline"
+              onClick={() => handleHotkeyClick(hk)}
+              disabled={isWaiting}
+              style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1' }}
+            >
+              {hk}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Quick-Reply Buttons */}
       {quickReplies.length > 0 && !isEventSelection && (
         <div className="chat-panel__chips">
-          {quickReplies.map(reply => (
-            <button
-              key={reply}
-              className="chip"
-              onClick={() => onQuickReply(reply)}
-              disabled={isWaiting}
-            >
-              {reply}
-            </button>
-          ))}
+          {quickReplies.map(reply => {
+            const isSelected = step === 3 && selectedServices.includes(reply);
+            return (
+              <button
+                key={reply}
+                className={`chip ${isSelected ? 'chip--active' : ''}`}
+                onClick={() => onQuickReply(reply)}
+                disabled={isWaiting}
+                style={isSelected ? { background: '#037A8B', color: '#fff', border: '1px solid #037A8B' } : {}}
+              >
+                {isSelected && '✓ '}{reply}
+              </button>
+            )
+          })}
         </div>
       )}
 

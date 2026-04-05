@@ -104,6 +104,12 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         if (resp.ok) {
           const data = await resp.json()
           setStory(data.story)
+          if (data.hq_address && address === '' || address.includes('Musterstraße 1')) {
+            setAddress(data.hq_address)
+          }
+          if (data.logo_url) {
+            setLocal(prev => ({ ...prev, companyLogo: data.logo_url }))
+          }
         }
       } catch (err) {
         setStory('Dein perfektes Menü ist bereit. Wir freuen uns auf dein Event!')
@@ -365,6 +371,9 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
 
       {/* ── Story at the bottom ──────────────────────────── */}
       <div style={{ marginTop: '40px', background: '#f0fdfa', padding: '32px', borderRadius: '24px', border: '1px solid #037A8B', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        {local.companyLogo && (
+          <img src={local.companyLogo} alt="Firmenlogo" style={{ height: '40px', marginBottom: '16px', objectFit: 'contain' }} />
+        )}
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#037A8B', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           ✨ Deine persönliche Menü-Story
         </h3>

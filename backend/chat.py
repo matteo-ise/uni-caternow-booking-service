@@ -26,23 +26,20 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
 router = APIRouter()
-GEMINI_MODEL = "models/gemini-flash-lite-latest"
+GEMINI_MODEL = "models/gemini-2.5-flash"
 
-BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der wohl charmanteste Menü-Verkäufer der Welt. 
+BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der charmanteste Menü-Verkäufer der Welt.
 
-STRIKTE REGEL:
-Du darfst NIEMALS Gerichte erfinden. Nutze AUSSCHLIESSLICH die Namen aus der Liste "VERFÜGBARE ECHTE GERICHTE". 
-Wir haben z.B. mehrere Sorten Tiramisu oder Mousse – schlage IMMER die exakten Namen vor, die in der Liste stehen.
-
-PERSONA:
-- Charmant, witzig, extrem kurze Antworten (max 2 Sätze).
-- Nutze rigeros Firmen-Research (Werte, Slogan, Farben).
-- UPSELLING-PROFI: Sobald eine Hauptspeise gefunden wurde, frage SOFORT nach einer zweiten (HP2).
+STRIKTE REGELN:
+- Du darfst NIEMALS Gerichte erfinden. Nutze AUSSCHLIESSLICH die echten Namen aus der Liste.
+- TEXT-STIL: Extrem kurze, knackige und punchy Nachrichten (1-2 Sätze pro Absatz). Nutze reichlich Emojis und bilde ein starkes Storytelling um das Event und die Firma.
+- MULTI-MESSAGES: Wenn du eine Pause simulieren willst oder zwei separate Nachrichten schicken willst, trenne sie exakt mit "|||".
+- UPSELLING: Sobald eine Hauptspeise gefunden wurde, biete charmant eine zweite an (z.B. "Damit für jeden was dabei ist!").
+- COMPANY MATCH: Nutze die recherchierten Farben, Werte und Logos, um das Menü wie maßgeschneidert wirken zu lassen.
 
 MISSION:
-1. Nutze RAG für echte Menü-Vorschläge.
-2. Die Gerichte erscheinen rechts im Canvas. Verweise darauf.
-3. Hänge am Ende ZWINGEND diesen JSON Block an:
+1. Nutze RAG für Menü-Vorschläge. Verweise darauf, dass sie rechts erscheinen.
+2. Hänge am Ende deiner Entscheidung ZWINGEND diesen JSON Block an, um die UI zu aktualisieren:
 [MENU_JSON]
 {
   "vorspeise": {"name": "EXAKTER_NAME_AUS_LISTE"},
@@ -101,14 +98,18 @@ async def chat(request: ChatRequest):
     hard_facts = wizard_data.model_dump() if wizard_data else {}
     
     if wizard_data and wizard_data.customerType == "business":
-        research = run_company_research(wizard_data.companyName, wizard_data.companyDomain)
+        research = run_company_research(wizard_data.companyName)
         hard_facts.update(research.model_dump())
-        system_prompt += f"\n**RESEARCH DATA:** {research.company_name}, Score: {research.fancy_score}/100"
+        system_prompt += f"\n**RESEARCH DATA:** {research.company_name}, Score: {research.fancy_score}/100, HQ Adresse: {research.hq_address}, Logo: {research.logo_url}"
 
     async def stream_generator():
         full_reply = ""
         try:
-            model = genai.GenerativeModel(model_name=GEMINI_MODEL, system_instruction=system_prompt + "\n\n" + dishes_context)
+            model = genai.GenerativeModel(
+                model_name=GEMINI_MODEL, 
+                system_instruction=system_prompt + "\n\n" + dishes_context,
+                tools=[{"google_search": {}}]
+            )
             history = [{"role": m.role, "parts": [m.content]} for m in conversation[:-1]]
             chat_session = model.start_chat(history=history)
             response = chat_session.send_message(last_user_msg, stream=True)

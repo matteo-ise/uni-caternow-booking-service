@@ -1,6 +1,7 @@
 import os
 import google.generativeai as genai
 from pydantic import BaseModel
+import re
 
 class ResearchResult(BaseModel):
     is_business: bool
@@ -10,25 +11,40 @@ class ResearchResult(BaseModel):
     summary: str = ""
     company_colors: list[str] = []
     slogan: str | None = None
+    hq_address: str | None = None
+    logo_url: str | None = None
 
 # In-memory cache for research to save quota
 _research_cache = {}
 
-def run_company_research(company_name: str, domain: str) -> ResearchResult:
-    """Führt Recherche durch mit dem leichtesten Modell (Lite), um Quota zu sparen."""
-    if not company_name and not domain:
+def run_company_research(company_name_or_domain: str) -> ResearchResult:
+    """Führt Recherche durch mit Google Search Grounding."""
+    if not company_name_or_domain:
         return ResearchResult(is_business=False)
 
-    search_target = company_name if company_name else domain
+    search_target = company_name_or_domain.strip()
     
     # Check cache first
     if search_target in _research_cache:
         return _research_cache[search_target]
 
-    # Nutze das "billigste"/leichteste Modell für maximale Quota
-    model = genai.GenerativeModel("models/gemini-flash-lite-latest")
+    # Nutze das stärkere Modell mit Search Grounding
+    model = genai.GenerativeModel(
+        "models/gemini-2.5-flash",
+        tools=[{"google_search": {}}]
+    )
     
-    prompt = f"""Analysiere die Firma "{search_target}". Antworte NUR mit JSON: {{ "core_values": ["Wert1"], "fancy_score": 50, "summary": "...", "company_colors": ["Farbe"], "slogan": "..." }}"""
+    prompt = f"""Analysiere die Firma "{search_target}". Antworte NUR mit JSON, keine Markdown Blöcke. Formatiere strikt als:
+{{
+  "company_name": "Gefundener echter Name",
+  "domain": "gefundene-domain.de",
+  "core_values": ["Wert1", "Wert2"], 
+  "fancy_score": 50, 
+  "summary": "...", 
+  "company_colors": ["Farbe"], 
+  "slogan": "...",
+  "hq_address": "Reale Hauptsitz Adresse (Straße, PLZ, Ort) falls findbar, sonst null"
+}}"""
 
     try:
         response = model.generate_content(prompt)
@@ -42,14 +58,23 @@ def run_company_research(company_name: str, domain: str) -> ResearchResult:
         import json
         data = json.loads(text_resp.strip())
         
+        domain = data.get("domain", "")
+        logo_url = None
+        if domain:
+            # Versuche saubere Domain für Logo API zu extrahieren
+            clean_domain = re.sub(r'^https?://', '', domain).split('/')[0]
+            logo_url = f"https://logo.clearbit.com/{clean_domain}"
+        
         res = ResearchResult(
             is_business=True,
-            company_name=company_name,
+            company_name=data.get("company_name", search_target),
             core_values=data.get("core_values", ["Qualität"]),
             fancy_score=data.get("fancy_score", 50),
             summary=data.get("summary", "Ein spannendes Unternehmen."),
             company_colors=data.get("company_colors", ["Blau"]),
-            slogan=data.get("slogan")
+            slogan=data.get("slogan"),
+            hq_address=data.get("hq_address"),
+            logo_url=logo_url
         )
         _research_cache[search_target] = res
         return res
@@ -58,7 +83,7 @@ def run_company_research(company_name: str, domain: str) -> ResearchResult:
         # Return a neutral result but don't stop the flow
         return ResearchResult(
             is_business=True,
-            company_name=company_name,
+            company_name=search_target,
             core_values=["Innovation"],
             fancy_score=50,
             summary="Unternehmen im Analyse-Modus.",

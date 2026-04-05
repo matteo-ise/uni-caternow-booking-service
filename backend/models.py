@@ -17,7 +17,6 @@ class WizardData(BaseModel):
     date: Optional[str] = None
     budget: Optional[str] = None
     companyName: Optional[str] = None
-    companyDomain: Optional[str] = None
 
 
 class Dish(BaseModel):

@@ -34,25 +34,42 @@ class StoryRequest(BaseModel):
 async def get_checkout_story(req: StoryRequest):
     """Generiert ein persönliches Storytelling für den Checkout basierend auf dem Memory."""
     memory = get_memory(req.lead_id)
-    if not memory:
-        return {"story": "Schön, dass du dich für ein Catering von uns entschieden hast! Wir freuen uns darauf, dein Event kulinarisch zu begleiten."}
     
-    model = genai.GenerativeModel("models/gemini-flash-lite-latest")
-    prompt = f"""
-    Basierend auf diesem Lead-Gedächtnis:
-    {memory}
-    
-    Schreibe einen extrem charmanten, kurzen Verkaufs-Gruß (max 3 Sätze) für die Checkout-Seite.
-    - Sprich den Kunden persönlich an (Du/Sie je nach Score).
-    - Nutze Storytelling: Erwähne den Anlass, die Firma oder eine Vorliebe (z.B. 'Passend zu eurem Firmenevent bei [Firma]...').
-    - Beende mit einem herzlichen Gruß in die Stadt des Kunden (falls bekannt, sonst allgemein).
-    - Der Text soll Hunger auf das Menü machen.
-    """
-    try:
-        response = model.generate_content(prompt)
-        return {"story": response.text.strip()}
-    except:
-        return {"story": "Dein perfektes Menü ist nur noch einen Klick entfernt. Wir freuen uns auf dein Event!"}
+    # Default values
+    hq_address = ""
+    logo_url = ""
+    story = "Schön, dass du dich für ein Catering von uns entschieden hast! Wir freuen uns darauf, dein Event kulinarisch zu begleiten."
+
+    if memory:
+        # Extract metadata
+        addr_match = re.search(r"\*\*HQ Adresse:\*\* (.*)", memory)
+        if addr_match:
+            hq_address = addr_match.group(1).strip()
+            if hq_address == "Unbekannt" or hq_address == "null" or hq_address == "None":
+                hq_address = ""
+                
+        logo_match = re.search(r"\*\*Logo URL:\*\* (.*)", memory)
+        if logo_match:
+            logo_url = logo_match.group(1).strip()
+
+        model = genai.GenerativeModel("models/gemini-flash-lite-latest")
+        prompt = f"""
+        Basierend auf diesem Lead-Gedächtnis:
+        {memory}
+        
+        Schreibe einen extrem charmanten, kurzen Verkaufs-Gruß (max 3 Sätze) für die Checkout-Seite.
+        - Sprich den Kunden persönlich an (Du/Sie je nach Score).
+        - Nutze Storytelling: Erwähne den Anlass, die Firma oder eine Vorliebe (z.B. 'Passend zu eurem Firmenevent bei [Firma]...').
+        - Beende mit einem herzlichen Gruß in die Stadt des Kunden (falls bekannt, sonst allgemein).
+        - Der Text soll Hunger auf das Menü machen.
+        """
+        try:
+            response = model.generate_content(prompt)
+            story = response.text.strip()
+        except:
+            pass
+
+    return {"story": story, "hq_address": hq_address, "logo_url": logo_url}
 
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
 async def submit_order(order: OrderSubmit, db: Session = Depends(get_db), current_user: Optional[dict] = Depends(get_optional_user)):

@@ -16,7 +16,6 @@ export default function Step1Wizard({ onNext, onClose }) {
     budget:        '',
     customerType:  'private',
     companyName:   '',
-    companyDomain: '',
   })
 
   const isBusiness = data.customerType === 'business'
@@ -135,34 +134,19 @@ export default function Step1Wizard({ onNext, onClose }) {
 
           {/* Firmendaten (nur wenn business) */}
           {isBusiness && (
-            <>
-              <div className="form-field">
-                <label className="form-field__label" htmlFor="companyName">
-                  Firmenname
-                </label>
-                <input
-                  id="companyName"
-                  type="text"
-                  className="form-field__input"
-                  placeholder="Musterfirma GmbH"
-                  value={data.companyName}
-                  onChange={e => set('companyName', e.target.value)}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-field__label" htmlFor="companyDomain">
-                  Domain
-                </label>
-                <input
-                  id="companyDomain"
-                  type="text"
-                  className="form-field__input"
-                  placeholder="musterfirma.de"
-                  value={data.companyDomain}
-                  onChange={e => set('companyDomain', e.target.value)}
-                />
-              </div>
-            </>
+            <div className="form-field form-field--full">
+              <label className="form-field__label" htmlFor="companyName">
+                Firmenname oder Domain
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                className="form-field__input"
+                placeholder="z.B. SAP oder sap.com"
+                value={data.companyName}
+                onChange={e => set('companyName', e.target.value)}
+              />
+            </div>
           )}
         </div>
 

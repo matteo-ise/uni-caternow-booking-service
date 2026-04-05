@@ -26,17 +26,18 @@ def init_memory(lead_id: str, hard_facts: dict):
     path = _get_memory_path(lead_id)
     if path.exists():
         return
-        
+
     content = f"""# Lead Memory: {lead_id}
 
 ## Hard Facts
-- **Firma:** {hard_facts.get('companyName', 'Privat/Unbekannt')} ({hard_facts.get('companyDomain', '')})
+- **Firma:** {hard_facts.get('companyName', 'Privat/Unbekannt')}
+- **HQ Adresse:** {hard_facts.get('hq_address', 'Unbekannt')}
+- **Logo URL:** {hard_facts.get('logo_url', '')}
 - **Datum:** {hard_facts.get('date', 'Unbekannt')}
 - **Personen:** {hard_facts.get('persons', 'Unbekannt')}
 - **Budget:** {hard_facts.get('budget', 'Unbekannt')}
 - **Farben:** {', '.join(hard_facts.get('company_colors', []))}
 - **Slogan:** {hard_facts.get('slogan', '')}
-
 ## Soft Facts
 - **Stimmung:** Neutral
 - **Vorlieben/Abneigungen:** Bisher keine bekannt.
