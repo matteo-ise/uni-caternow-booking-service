@@ -154,17 +154,6 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
                 className="final__edit-input"
               />
             </label>
-            <label className="final__edit-field">
-              <span>👥</span>
-              <input
-                type="number"
-                min="1"
-                value={local.persons}
-                onChange={e => set('persons', e.target.value)}
-                className="final__edit-input final__edit-input--sm"
-                placeholder="Personen"
-              />
-            </label>
             <button className="final__edit-save" onClick={() => setEditing(false)}>
               ✓ Speichern
             </button>
@@ -172,8 +161,7 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         ) : (
           <>
             <span>📅 {dateFormatted}</span>
-            <span>👥 {display.persons} Personen</span>
-            <button className="final__edit-btn" onClick={() => setEditing(true)} title="Angaben bearbeiten">
+            <button className="final__edit-btn" onClick={() => setEditing(true)} title="Datum bearbeiten">
               ✏️ Ändern
             </button>
           </>
