@@ -35,7 +35,7 @@ def seed():
         dish = DBDish(
             csv_id=csv_id, name=name, kategorie=kat, preis=preis, 
             embedding=fake_vector, feedback_context="", tenant_id="default",
-            image_url=f"/images/dishes/{csv_id}.jpg"
+            image_url=f"/images/dishes/{csv_id}.jpeg"
         )
         db.add(dish)
         count += 1

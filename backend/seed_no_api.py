@@ -34,7 +34,7 @@ def seed():
             embedding=fake_vector, 
             feedback_context="", 
             tenant_id="default",
-            image_url=f"/images/dishes/{data[0]}.jpg"
+            image_url=f"/images/dishes/{data[0]}.jpeg"
         )
         db.add(dish)
     

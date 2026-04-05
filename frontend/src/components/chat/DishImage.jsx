@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 /**
  * DishImage Component with 3-level fallback strategy:
- * 1. Local GitHub/Render Image (/images/dishes/{id}.jpg)
+ * 1. Local GitHub/Render Image (/images/dishes/{id}.jpeg)
  * 2. Unsplash Image (search by dish name)
  * 3. Clean SVG Mockup
  */

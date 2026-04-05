@@ -149,7 +149,7 @@ async def load_and_embed_dishes(force_refresh=False):
                     is_fingerfood=to_bool(row.get("eignung_fingerfood"), False),
                     is_buffet=to_bool(row.get("eignung_buffet"), True),
                     popularity=to_float(row.get("beliebheit")),
-                    image_url=f"/images/dishes/{cid}.jpg", 
+                    image_url=f"/images/dishes/{cid}.jpeg", 
                     feedback_context=rich_description, 
                     tenant_id="default"
                 ))
