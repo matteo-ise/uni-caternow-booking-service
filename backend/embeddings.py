@@ -1,3 +1,4 @@
+import asyncio
 import os
 import pandas as pd
 import numpy as np
@@ -17,28 +18,18 @@ logger = logging.getLogger("CaterNow-Search")
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Gerichte_Cater_Now_02_26.csv")
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "CaterNow_Data_master.xlsx")
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 async def load_and_embed_dishes(force_refresh=False):
     db = SessionLocal()
     try:
         if not os.path.exists(DATA_PATH):
+            logger.error(f"Data file not found at {DATA_PATH}")
             return
-        try:
-            # Versuche zuerst UTF-8 mit BOM (Excel Standard)
-            df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8-sig")
-        except:
-            try:
-                # Versuche MacRoman (Häufiger auf macOS / 0x9f deutet darauf hin)
-                df = pd.read_csv(DATA_PATH, sep=";", encoding="mac_roman")
-            except:
-                try:
-                    # Versuche CP1252 (Deutscher Standard / Latin-1)
-                    df = pd.read_csv(DATA_PATH, sep=";", encoding="cp1252")
-                except:
-                    # Letzter Ausweg (UTF-8 ohne BOM)
-                    df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8")
+            
+        # Read from Excel instead of CSV
+        df = pd.read_excel(DATA_PATH)
         
         if force_refresh:
             db.query(DBDish).delete()
@@ -48,87 +39,127 @@ async def load_and_embed_dishes(force_refresh=False):
         dishes_to_process = []
         for _, row in df.iterrows():
             try:
-                # Nutze 'id' Spalte (stabil)
-                cid = int(row.get("id", 0))
-                if cid != 0 and cid not in existing_ids:
+                cid = int(row.get("ID", 0))
+                if cid != 0 and (force_refresh or cid not in existing_ids):
                     dishes_to_process.append(row)
             except:
                 continue
 
         if not dishes_to_process:
+            logger.info("No new dishes to process.")
             return
 
-        # Batch Processing für API-Effizienz (10 Gerichte pro Request)
+        # Batch Processing (10 dishes per request)
         for i in range(0, len(dishes_to_process), 10):
             batch = dishes_to_process[i:i + 10]
             rich_texts_to_embed = []
             objects_to_add = []
             
             for row in batch:
-                kat = None
-                if float(row.get("vorspeise", 0)) == 1.0: kat = "vorspeise"
-                elif float(row.get("hauptgericht", 0)) == 1.0: kat = "hauptgericht"
-                elif float(row.get("dessert", 0)) == 1.0: kat = "dessert"
-                
-                if not kat: continue
-                
-                name = str(row.get("name", "")).strip()
+                name = str(row.get("productTitle", "")).strip()
                 if not name or name == "nan": continue
-                cid = int(row.get("id", 0))
-
-                # --- RICH CONTEXT GENERATION ---
-                # Wir bauen einen "Satz", der alle Attribute beschreibt
-                attributes = []
-                # Boolean-Flags (1 oder 0)
-                for col in ["vegan", "vegetarisch", "kalt", "warm", "schwein", "rind", "geflügel", "halal", "business", "high_class", "leicht_im_magen"]:
-                    if col in row and str(row[col]).strip() == "1":
-                        attributes.append(col)
                 
-                # Scores / Levels (wenn vorhanden)
-                for score_col in ["filling_score", "spiciness", "price_level"]:
-                    if score_col in row and pd.notna(row[score_col]):
-                        attributes.append(f"{score_col}: {row[score_col]}")
+                cid = int(row.get("ID", 0))
+                kat = str(row.get("dishType", "Hauptgericht")).lower()
+                # Normalize category to match existing logic (vorspeise, hauptgericht, dessert)
+                if "vorspeise" in kat: kat = "vorspeise"
+                elif "dessert" in kat or "nachtisch" in kat: kat = "dessert"
+                else: kat = "hauptgericht"
 
-                # Optionales Feedback/Keywords Feld
-                extra_info = ""
-                if "ai_keywords" in row and pd.notna(row["ai_keywords"]):
-                    extra_info = f" Keywords: {row['ai_keywords']}."
-
-                rich_description = f"Gericht: {name}. Kategorie: {kat}. Merkmale: {', '.join(attributes)}.{extra_info}"
+                # --- NEW RICH CONTEXT GENERATION ---
+                desc = str(row.get("productDescription", ""))
+                diet = str(row.get("diet", ""))
+                kitchen = str(row.get("kitchen", ""))
+                allergenes = str(row.get("allergenes", ""))
+                
+                # Build descriptive context string for Gemini
+                parts = [f"Gericht: {name}", f"Kategorie: {kat}"]
+                if desc and desc != "nan": parts.append(f"Beschreibung: {desc}")
+                if diet and diet != "nan": parts.append(f"Diät: {diet}")
+                if kitchen and kitchen != "nan": parts.append(f"Küche: {kitchen}")
+                
+                # Add scores
+                scores = []
+                for s_col in ["fancy_score", "heavy_score", "filling_score", "traditional_score", "spicy_score"]:
+                    val = row.get(s_col)
+                    if pd.notna(val):
+                        scores.append(f"{s_col.replace('_score', '')}: {val}")
+                if scores:
+                    parts.append(f"Scores: {', '.join(scores)}")
+                
+                rich_description = ". ".join(parts) + "."
                 rich_texts_to_embed.append(rich_description)
                 # -------------------------------
                 
                 preis = 15.0
                 try:
-                    p = row.get("Preis")
-                    if pd.notna(p): preis = float(str(p).replace(",", "."))
-                except:
-                    pass
+                    p = row.get("priceNet")
+                    if pd.notna(p): preis = float(p)
+                except: pass
+
+                # Map Suitability
+                is_ff = False
+                eff = row.get("eignung_fingerfood")
+                if pd.notna(eff) and (str(eff).lower() == "1" or str(eff).lower() == "ja"):
+                    is_ff = True
+                
+                is_bf = True
+                ebf = row.get("eignung_buffet")
+                if pd.notna(ebf) and (str(ebf).lower() == "0" or str(ebf).lower() == "nein"):
+                    is_bf = False
 
                 objects_to_add.append(DBDish(
-                    csv_id=cid, name=name, kategorie=kat, preis=preis, 
-                    image_url=f"/images/dishes/{cid}.jpg", feedback_context=rich_description, tenant_id="default"
+                    csv_id=cid, 
+                    name=name, 
+                    description=desc if pd.notna(desc) else None,
+                    kategorie=kat, 
+                    dish_type=str(row.get("dishType", "")),
+                    diet=diet if pd.notna(diet) else None,
+                    preis=preis, 
+                    allergenes=allergenes if pd.notna(allergenes) else None,
+                    additives=str(row.get("additives", "")) if pd.notna(row.get("additives")) else None,
+                    kitchen=kitchen if pd.notna(kitchen) else None,
+                    fancy_score=float(row.get("fancy_score", 0.5)) if pd.notna(row.get("fancy_score")) else 0.5,
+                    heavy_score=float(row.get("heavy_score", 0.5)) if pd.notna(row.get("heavy_score")) else 0.5,
+                    filling_score=float(row.get("filling_score", 0.5)) if pd.notna(row.get("filling_score")) else 0.5,
+                    traditional_score=float(row.get("traditional_score", 0.5)) if pd.notna(row.get("traditional_score")) else 0.5,
+                    spicy_score=float(row.get("spicy_score", 0.0)) if pd.notna(row.get("spicy_score")) else 0.0,
+                    is_fingerfood=is_ff,
+                    is_buffet=is_bf,
+                    popularity=float(row.get("beliebheit", 0.5)) if pd.notna(row.get("beliebheit")) else 0.5,
+                    image_url=f"/images/dishes/{cid}.jpg", 
+                    feedback_context=rich_description, 
+                    tenant_id="default"
                 ))
 
             if rich_texts_to_embed:
-                try:
-                    # Wir embedden den RICH CONTEXT, nicht nur den Namen!
-                    res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
-                    for idx, vec in enumerate(res["embedding"]):
-                        objects_to_add[idx].embedding = vec
-                    db.add_all(objects_to_add)
-                    db.commit()
-                    logger.info(f"Vektorisierte Batch: {len(objects_to_add)} Gerichte.")
-                except Exception as e:
-                    logger.error(f"Embedding API Error: {e}")
-                    # Fallback: Zero-Vektoren (Fuzzy Search übernimmt dann)
-                    fake = [0.0] * 3072
-                    for o in objects_to_add:
-                        o.embedding = fake
-                    db.add_all(objects_to_add)
-                    db.commit()
+                for attempt in range(3): # Retry up to 3 times
+                    try:
+                        res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
+                        for idx, vec in enumerate(res["embedding"]):
+                            objects_to_add[idx].embedding = vec
+                        db.add_all(objects_to_add)
+                        db.commit()
+                        logger.info(f"Vektorisierte Batch ({i//10 + 1}): {len(objects_to_add)} Gerichte.")
+                        # Small delay to respect free tier RPM (100 RPM)
+                        await asyncio.sleep(1.2) 
+                        break
+                    except Exception as e:
+                        if "429" in str(e) and attempt < 2:
+                            wait_time = 30 * (attempt + 1)
+                            logger.warning(f"Quota exceeded. Waiting {wait_time}s... (Attempt {attempt+1})")
+                            await asyncio.sleep(wait_time)
+                        else:
+                            logger.error(f"Embedding API Error: {e}")
+                            fake = [0.0] * 3072
+                            for o in objects_to_add:
+                                o.embedding = fake
+                            db.add_all(objects_to_add)
+                            db.commit()
+                            break
     except Exception as e:
         logger.error(f"Sync Error: {e}")
+        db.rollback()
     finally:
         db.close()
 

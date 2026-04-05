@@ -11,12 +11,31 @@ class DBDish(Base):
     tenant_id = Column(String, index=True, default="default")
     csv_id = Column(Integer, unique=True, index=True, nullable=True)
     name = Column(String, index=True, nullable=False)
-    kategorie = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    kategorie = Column(String, index=True, nullable=False) # e.g. vorspeise, hauptgericht, dessert
+    dish_type = Column(String, nullable=True) # more specific type if any
+    diet = Column(String, nullable=True) # e.g. vegan, vegetarisch
     preis = Column(Float, nullable=True)
+    allergenes = Column(String, nullable=True)
+    additives = Column(String, nullable=True)
+    kitchen = Column(String, nullable=True) # e.g. Italian, Asian
+    
+    # AI/ML Scores (0.0 to 1.0)
+    fancy_score = Column(Float, nullable=True, default=0.0)
+    heavy_score = Column(Float, nullable=True, default=0.0)
+    filling_score = Column(Float, nullable=True, default=0.0)
+    traditional_score = Column(Float, nullable=True, default=0.0)
+    spicy_score = Column(Float, nullable=True, default=0.0)
+    
+    # Suitability & Popularity
+    is_fingerfood = Column(Boolean, nullable=True, default=False)
+    is_buffet = Column(Boolean, nullable=True, default=True)
+    popularity = Column(Float, nullable=True, default=0.5)
+    
     image_url = Column(String, nullable=True)
     feedback_context = Column(Text, nullable=True, default="")
     
-    # Gemini embedding model
+    # Gemini embedding model (3072 dimensions)
     embedding = Column(Vector(3072))
 
 class DBUser(Base):
