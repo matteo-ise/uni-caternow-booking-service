@@ -60,8 +60,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CaterNow Chatbot API", lifespan=lifespan)
 
-FRONTEND_URL = os.environ.get("VITE_API_URL", "http://localhost:5173").replace("/api", "")
-origins = ["http://localhost:5173", "http://localhost:3000", FRONTEND_URL, "https://uni-caternow-booking-service.onrender.com", "https://caternow-frontend-prod.onrender.com"]
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+origins = [
+    "http://localhost:5173", 
+    "http://localhost:3000", 
+    FRONTEND_URL, 
+    "https://caternow.onrender.com", 
+    "https://uni-caternow-booking-service.onrender.com", 
+    "https://caternow-frontend-prod.onrender.com"
+]
 
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(chat_router, prefix="/api")
