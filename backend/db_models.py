@@ -34,6 +34,7 @@ class DBDish(Base):
     
     image_url = Column(String, nullable=True)
     feedback_context = Column(Text, nullable=True, default="")
+    manual_feedback = Column(Text, nullable=True)
     
     # Gemini embedding model (3072 dimensions)
     embedding = Column(Vector(3072))

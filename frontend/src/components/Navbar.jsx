@@ -21,7 +21,7 @@ export default function Navbar() {
         <ul className={`nav-links ${isMenuOpen ? 'nav-links--open' : ''}`}>
           <li><a href="#wie-es-funktioniert" onClick={() => setIsMenuOpen(false)}>So funktioniert's</a></li>
           <li><a href="#leistungen" onClick={() => setIsMenuOpen(false)}>Leistungen</a></li>
-          <li><a href="#faq" onClick={() => setIsMenuOpen(false)}>FAQ</a></li>
+          <li><Link to="/admin" onClick={() => setIsMenuOpen(false)}>Admin Studio</Link></li>
           <li><a href="#kontakt" onClick={() => setIsMenuOpen(false)}>Kontakt</a></li>
         </ul>
       </div>

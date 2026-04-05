@@ -22,10 +22,26 @@ class LeadSummary(BaseModel):
     last_updated: float
     size: int
 
+class MemoryUpdate(BaseModel):
+    content: str
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+
 def verify_admin(x_admin_token: str = Header(None)):
     if x_admin_token != ADMIN_SECRET:
         raise HTTPException(status_code=401, detail="Zugriff verweigert: Ungültiger Admin-Token")
     return True
+
+@router.post("/admin/rebuild-db")
+async def trigger_rebuild_db(authenticated: bool = Depends(verify_admin)):
+    """Triggert den kompletten Datenbank-Rebuild (Achtung: Löscht alle Daten!)."""
+    from rebuild_db import rebuild
+    try:
+        rebuild()
+        return {"status": "success", "message": "Datenbank wurde erfolgreich neu aufgebaut und 177 Gerichte geladen."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Rebuild: {str(e)}")
 
 @router.get("/admin/leads", response_model=List[LeadSummary])
 async def list_leads(authenticated: bool = Depends(verify_admin)):
@@ -53,10 +69,29 @@ async def get_lead_memory(lead_id: str, authenticated: bool = Depends(verify_adm
         raise HTTPException(status_code=404, detail="Lead Memory nicht gefunden")
     return {"content": path.read_text(encoding="utf-8")}
 
+@router.put("/admin/memory/{lead_id}")
+async def update_lead_memory(lead_id: str, data: MemoryUpdate, authenticated: bool = Depends(verify_admin)):
+    """Aktualisiert den Inhalt der Memory-Datei."""
+    path = MEMORY_DIR / f"{lead_id}.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Lead Memory nicht gefunden")
+    path.write_text(data.content, encoding="utf-8")
+    return {"status": "success", "message": "Memory aktualisiert"}
+
 @router.get("/admin/orders")
 async def get_all_orders(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
     orders = db.query(DBOrder).order_by(DBOrder.created_at.desc()).all()
     return [{"id": o.id, "lead_id": o.lead_id, "status": o.status, "total_price": o.total_price, "created_at": o.created_at, "order_data": json.loads(o.order_data)} for o in orders]
+
+@router.patch("/admin/orders/{order_id}")
+async def update_order_status(order_id: int, data: OrderStatusUpdate, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Aktualisiert den Status einer Bestellung."""
+    order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Bestellung nicht gefunden")
+    order.status = data.status
+    db.commit()
+    return {"status": "success"}
 
 @router.get("/admin/feedbacks")
 async def get_all_feedbacks(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):

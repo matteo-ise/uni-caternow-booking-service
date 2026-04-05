@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { API_URL } from '../config'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function Admin() {
   const [password, setPassword] = useState('')
@@ -25,13 +26,34 @@ export default function Admin() {
 
   const handleLogin = (e) => {
     e.preventDefault()
-    if (password === 'caternow-admin') {
+    // Check against env variable if available, otherwise fallback to default
+    const expectedPassword = import.meta.env.VITE_ADMIN_SECRET || 'caternow-admin';
+    if (password === expectedPassword) {
       setIsAuthorized(true)
       localStorage.setItem('adminAuthorized', 'true')
-      localStorage.setItem('adminPassword', password) // Save for subsequent API calls
+      localStorage.setItem('adminPassword', password)
     } else {
       alert('Falsches Passwort!')
     }
+  }
+
+  const handleRebuildDB = async () => {
+    if (!window.confirm("ACHTUNG: Dies löscht ALLE Bestellungen, User und Feedbacks in der Datenbank und lädt die Gerichte neu aus der CSV. Fortfahren?")) return;
+    
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/rebuild-db`, { 
+        method: 'POST',
+        headers: { 'X-Admin-Token': getAdminToken() } 
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        alert(data.message)
+        fetchAllData()
+      } else {
+        const err = await resp.json()
+        alert("Fehler: " + err.detail)
+      }
+    } catch (err) { alert("Netzwerkfehler beim Rebuild.") }
   }
 
   const handleLogout = () => {
@@ -91,6 +113,39 @@ export default function Admin() {
     } catch (err) { setMemoryContent('Fehler beim Laden.') }
   }
 
+  const saveMemory = async () => {
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/memory/${selectedLead}`, {
+        method: 'PUT',
+        headers: { 
+          'X-Admin-Token': getAdminToken(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content: memoryContent })
+      })
+      if (resp.ok) alert("Memory erfolgreich gespeichert! Die KI berücksichtigt diese Notizen ab sofort.")
+      else alert("Fehler beim Speichern.")
+    } catch (err) { alert("Netzwerkfehler") }
+  }
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 
+          'X-Admin-Token': getAdminToken(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+      })
+      if (resp.ok) {
+        fetchOrders() // Tabelle neu laden
+      } else {
+        alert("Fehler beim Update des Status")
+      }
+    } catch (err) { alert("Netzwerkfehler") }
+  }
+
   // File Upload
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -135,6 +190,15 @@ export default function Admin() {
   // Metrics calculation
   const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalOrders = orders.length;
+
+  // Chart Data preparation (group orders by date)
+  const ordersByDate = orders.reduce((acc, order) => {
+    const date = new Date(order.created_at).toLocaleDateString()
+    if (!acc[date]) acc[date] = 0
+    acc[date] += (order.total_price || 0)
+    return acc
+  }, {})
+  const chartData = Object.keys(ordersByDate).map(date => ({ date, umsatz: ordersByDate[date] })).reverse()
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#f8fafc', fontFamily: 'Montserrat, sans-serif' }}>
@@ -233,11 +297,48 @@ export default function Admin() {
                   </div>
                 </div>
               </div>
+
+              {/* DANGER ZONE */}
+              <div style={{ marginTop: '24px', padding: '16px', background: '#fff1f2', borderRadius: '12px', border: '1px solid #fecaca' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#991b1b' }}>Danger Zone: Datenbank-Reset</div>
+                    <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>Löscht alle Daten und baut das Schema neu auf. Nutze dies bei Struktur-Fehlern.</div>
+                  </div>
+                  <button 
+                    onClick={handleRebuildDB}
+                    style={{ background: '#dc2626', color: '#fff', padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Datenbank neu aufbauen
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Platz für schöne Graphen (Recharts) */}
-            <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#94a3b8' }}>
-              Hier könnte eine Recharts Umsatz-Kurve stehen 📈
+            {/* Recharts Umsatz-Kurve */}
+            <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '24px', color: '#0f172a' }}>Umsatzentwicklung nach Tagen</h2>
+              <div style={{ height: '300px', width: '100%' }}>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dx={-10} tickFormatter={(value) => `${value}€`} />
+                      <Tooltip 
+                        cursor={{fill: '#f1f5f9'}} 
+                        contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
+                        formatter={(value) => [`${value} €`, 'Umsatz']}
+                      />
+                      <Bar dataKey="umsatz" fill="#037A8B" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                    Noch keine Bestelldaten für den Graphen vorhanden.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -263,7 +364,21 @@ export default function Admin() {
                       <td style={{ padding: '16px' }}>#{o.id}</td>
                       <td style={{ padding: '16px', fontWeight: 600 }}>{o.lead_id}</td>
                       <td style={{ padding: '16px' }}>
-                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 8px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600 }}>{o.status}</span>
+                        <select 
+                          value={o.status}
+                          onChange={(e) => updateOrderStatus(o.id, e.target.value)}
+                          style={{ 
+                            background: o.status === 'neu' ? '#dcfce7' : o.status === 'abgeschlossen' ? '#e2e8f0' : o.status === 'storniert' ? '#fee2e2' : '#fef08a', 
+                            color: o.status === 'neu' ? '#166534' : o.status === 'abgeschlossen' ? '#475569' : o.status === 'storniert' ? '#991b1b' : '#854d0e', 
+                            padding: '6px 12px', borderRadius: '8px', border: '1px solid transparent', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', outline: 'none' 
+                          }}
+                        >
+                          <option value="neu">Neu</option>
+                          <option value="in bearbeitung">In Bearbeitung</option>
+                          <option value="angebot versendet">Angebot versendet</option>
+                          <option value="abgeschlossen">Abgeschlossen</option>
+                          <option value="storniert">Storniert</option>
+                        </select>
                       </td>
                       <td style={{ padding: '16px', fontWeight: 700 }}>{o.total_price} €</td>
                       <td style={{ padding: '16px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString()}</td>
@@ -356,14 +471,26 @@ export default function Admin() {
               </div>
             </div>
 
-            <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px', display: 'flex', flexDirection: 'column' }}>
               {selectedLead ? (
-                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: '1.6', color: '#1e293b', margin: 0 }}>
-                  {memoryContent}
-                </pre>
+                <>
+                  <textarea 
+                    value={memoryContent}
+                    onChange={(e) => setMemoryContent(e.target.value)}
+                    style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button 
+                      onClick={saveMemory}
+                      style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Änderungen speichern
+                    </button>
+                  </div>
+                </>
               ) : (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-                  Wähle einen Lead aus der Liste, um das Live-Gedächtnis zu sehen.
+                  Wähle einen Lead aus der Liste, um das Live-Gedächtnis zu sehen und zu bearbeiten.
                 </div>
               )}
             </div>
