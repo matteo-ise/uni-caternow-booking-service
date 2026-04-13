@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import List
 from pydantic import BaseModel
 
-from database import get_db
-from db_models import DBOrder, DBFeedback, DBDish
+from database import get_db, SessionLocal
+from db_models import DBOrder, DBFeedback, DBDish, DBMemory
 from embeddings import load_and_embed_dishes
 
 router = APIRouter()
@@ -44,38 +44,33 @@ async def trigger_rebuild_db(authenticated: bool = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=f"Fehler beim Rebuild: {str(e)}")
 
 @router.get("/admin/leads", response_model=List[LeadSummary])
-async def list_leads(authenticated: bool = Depends(verify_admin)):
-    """Listet alle Leads (Dateien im Memory-Ordner) auf."""
-    if not MEMORY_DIR.exists():
-        return []
-    
+async def list_leads(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Listet alle Leads aus der Datenbank auf."""
     leads = []
-    for file in MEMORY_DIR.glob("*.md"):
-        stats = file.stat()
+    memories = db.query(DBMemory).order_by(DBMemory.updated_at.desc()).all()
+    for mem in memories:
         leads.append(LeadSummary(
-            id=file.stem,
-            last_updated=stats.st_mtime,
-            size=stats.st_size
+            id=mem.lead_id,
+            last_updated=mem.updated_at.timestamp() if mem.updated_at else 0.0,
+            size=len(mem.content) if mem.content else 0
         ))
-    
-    leads.sort(key=lambda x: x.last_updated, reverse=True)
     return leads
-
 @router.get("/admin/memory/{lead_id}")
-async def get_lead_memory(lead_id: str, authenticated: bool = Depends(verify_admin)):
-    """Gibt den Inhalt der Memory-Datei für einen Lead zurück."""
-    path = MEMORY_DIR / f"{lead_id}.md"
-    if not path.exists():
+async def get_lead_memory(lead_id: str, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Gibt den Inhalt der Memory für einen Lead zurück."""
+    mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+    if not mem:
         raise HTTPException(status_code=404, detail="Lead Memory nicht gefunden")
-    return {"content": path.read_text(encoding="utf-8")}
+    return {"content": mem.content}
 
 @router.put("/admin/memory/{lead_id}")
-async def update_lead_memory(lead_id: str, data: MemoryUpdate, authenticated: bool = Depends(verify_admin)):
-    """Aktualisiert den Inhalt der Memory-Datei."""
-    path = MEMORY_DIR / f"{lead_id}.md"
-    if not path.exists():
+async def update_lead_memory(lead_id: str, data: MemoryUpdate, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Aktualisiert den Inhalt der Memory für einen Lead."""
+    mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+    if not mem:
         raise HTTPException(status_code=404, detail="Lead Memory nicht gefunden")
-    path.write_text(data.content, encoding="utf-8")
+    mem.content = data.content
+    db.commit()
     return {"status": "success", "message": "Memory aktualisiert"}
 
 @router.get("/admin/orders")

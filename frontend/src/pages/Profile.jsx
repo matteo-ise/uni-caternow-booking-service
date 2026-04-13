@@ -57,7 +57,7 @@ export default function Profile() {
     let dishId = null
     if (!isGeneral) {
       const dishObj = Object.values(menu).find(d => d && (d.id || d.name || d) === target)
-      dishId = dishObj?.csv_id || null
+      dishId = dishObj?.id || dishObj?.csv_id || null
     }
 
     setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: true, error: null } }))
@@ -70,7 +70,7 @@ export default function Profile() {
         body: JSON.stringify({ order_id: orderId, rating: fb.rating || 5, comment: fb.comment, is_general: isGeneral, dish_id: dishId ? parseInt(dishId) : null })
       })
       if (resp.ok) {
-        setFeedbackState(prev => ({ ...prev, [orderId]: { rating: 5, comment: '', target: 'general', success: true } }))
+        setFeedbackState(prev => ({ ...prev, [orderId]: { rating: 5, comment: '', target: 'general', success: true, submitting: false } }))
         setTimeout(() => setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], success: false } })), 3500)
       } else {
         setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: false, error: 'Fehler beim Senden. Bitte nochmal versuchen.' } }))

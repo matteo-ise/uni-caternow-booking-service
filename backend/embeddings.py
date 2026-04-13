@@ -232,12 +232,14 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
             qobj = qobj.filter(DBDish.kategorie == kategorie)
         vres = qobj.order_by(DBDish.embedding.cosine_distance(qvec)).limit(top_k).all()
         for d, s in vres:
-            if np.sum(np.abs(np.array(d.embedding))) > 0:
-                results.append(Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, image_url=d.image_url, similarity_score=float(s)))
+            sim_score = float(s)
+            if sim_score >= 0.25 and np.sum(np.abs(np.array(d.embedding))) > 0:
+                results.append(Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, image_url=d.image_url, similarity_score=sim_score))
     except Exception as e:
         db.rollback()
         logger.error(f"Vector search failed, falling back to fuzzy: {e}")
 
+    # Fallback to fuzzy search only if vector search returned nothing good
     if len(results) < top_k:
         all_d = db.query(DBDish)
         if kategorie:
@@ -249,6 +251,8 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
             scored.append((d, sc))
         scored.sort(key=lambda x: x[1], reverse=True)
         for d, sc in scored:
+            if sc < 0.25: # Strict threshold for fuzzy matching too
+                continue
             if any(r.name == d.name for r in results):
                 continue
             results.append(Dish(name=d.name, kategorie=d.kategorie, preis=d.preis, image_url=d.image_url, similarity_score=min(0.99, 0.4 + (sc/2))))

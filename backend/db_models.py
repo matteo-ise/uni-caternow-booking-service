@@ -86,3 +86,11 @@ class DBUsageStats(Base):
     feature = Column(String, unique=True, index=True) # e.g. "google_search"
     count = Column(Integer, default=0)
     last_reset = Column(DateTime(timezone=True), server_default=func.now())
+
+class DBMemory(Base):
+    __tablename__ = "memories"
+    id = Column(Integer, primary_key=True)
+    lead_id = Column(String, unique=True, index=True, nullable=False)
+    content = Column(Text, nullable=False)
+    sidecar_data = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

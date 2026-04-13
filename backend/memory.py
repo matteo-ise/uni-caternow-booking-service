@@ -1,33 +1,23 @@
-import os
 import json
-from pathlib import Path
-from pydantic import BaseModel
 import google.generativeai as genai
-
-MEMORY_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data", "memory"))
-
-# Stelle sicher, dass der Ordner existiert
-MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+from pydantic import BaseModel
+from database import SessionLocal
+from db_models import DBMemory
 
 class UpdateMemoryRequest(BaseModel):
     lead_id: str
     user_message: str
     bot_message: str
     hard_facts: dict
-    
-def _get_memory_path(lead_id: str) -> Path:
-    # Basic sanitize
-    safe_id = "".join(c for c in lead_id if c.isalnum() or c in ('-', '_')).strip()
-    if not safe_id:
-        safe_id = "anonymous"
-    return MEMORY_DIR / f"{safe_id}.md"
 
-def init_memory(lead_id: str, hard_facts: dict):
-    path = _get_memory_path(lead_id)
-    if path.exists():
-        return
+def init_memory(lead_id: str, hard_facts: dict) -> str:
+    db = SessionLocal()
+    try:
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if mem:
+            return mem.content
 
-    content = f"""# 🕵️ Lead Intelligence Report: {lead_id}
+        content = f"""# 🕵️ Lead Intelligence Report: {lead_id}
 
 ## 🏢 Corporate Profile (Research Intelligence)
 - **Status:** {hard_facts.get('customerType', 'private').upper()}
@@ -54,90 +44,103 @@ def init_memory(lead_id: str, hard_facts: dict):
 ## 📝 Strategic Interaction Log
 - [System] Intelligence file initialized.
 """
-    path.write_text(content, encoding="utf-8")
-
+        new_mem = DBMemory(lead_id=lead_id, content=content, sidecar_data=json.dumps({}))
+        db.add(new_mem)
+        db.commit()
+        return content
+    finally:
+        db.close()
 
 def get_memory(lead_id: str) -> str | None:
-    """Liest das vorhandene Gedächtnis eines Leads aus."""
-    path = _get_memory_path(lead_id)
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    return None
+    db = SessionLocal()
+    try:
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if mem:
+            return mem.content
+        return None
+    finally:
+        db.close()
 
 def save_research_sidecar(lead_id: str, data: dict):
-    """Speichert Research-Daten als JSON-Sidecar neben der Memory-Datei."""
-    import json
-    safe_id = "".join(c for c in lead_id if c.isalnum() or c in ('-', '_')).strip()
-    if not safe_id:
-        safe_id = "anonymous"
-    path = MEMORY_DIR / f"{safe_id}.json"
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    db = SessionLocal()
+    try:
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if mem:
+            mem.sidecar_data = json.dumps(data, ensure_ascii=False)
+            db.commit()
+        else:
+            new_mem = DBMemory(lead_id=lead_id, content="", sidecar_data=json.dumps(data, ensure_ascii=False))
+            db.add(new_mem)
+            db.commit()
+    finally:
+        db.close()
 
 def get_research_sidecar(lead_id: str) -> dict | None:
-    """Liest den Research-Sidecar für einen Lead."""
-    import json
-    safe_id = "".join(c for c in lead_id if c.isalnum() or c in ('-', '_')).strip()
-    if not safe_id:
-        safe_id = "anonymous"
-    path = MEMORY_DIR / f"{safe_id}.json"
-    if path.exists():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-    return None
+    db = SessionLocal()
+    try:
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if mem and mem.sidecar_data:
+            try:
+                return json.loads(mem.sidecar_data)
+            except Exception:
+                return None
+        return None
+    finally:
+        db.close()
 
 def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_facts: dict):
     """
-    Diese Funktion liest die aktuelle Memory, füttert den neuen Chat-Austausch
+    Diese Funktion liest die aktuelle Memory aus der Datenbank, füttert den neuen Chat-Austausch
     an Gemini und lässt das Memory-Dokument live umschreiben/updaten.
     """
-    path = _get_memory_path(lead_id)
-    
-    if not path.exists():
-        init_memory(lead_id, hard_facts)
-        
-    current_memory = path.read_text(encoding="utf-8")
-    
-    # Nutze das stärkere Modell für die psychologische Analyse
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
-    
-    prompt = f"""
-    Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst. 
-    Deine Aufgabe ist es, aus dem Chat-Verlauf eines Kunden (Lead) extrem präzise Erkenntnisse (Findings) zu extrahieren.
-    
-    Aktuelles Dossier:
-    ```markdown
-    {current_memory}
-    ```
-    
-    Neueste Interaktion:
-    KUNDE: "{user_message}"
-    BOT: "{bot_message}"
-    
-    DEINE MISSION:
-    1. **Psychogramm schärfen:** Wie ist die Stimmung? (Professionell, sarkastisch, gestresst?). Wie hoch ist die Kaufabsicht (Cold/Warm/Hot)? Wie gut passen wir zur Firmenkultur (Alignment)?
-    2. **Findings extrahieren:** Was wissen wir jetzt NEUES über den Kunden? (z.B. "Legt Wert auf Regionalität", "Reagiert empfindlich auf Preise", "Will die Chefin beeindrucken").
-    3. **Log kürzen:** Füge EINEN extrem kurzen Satz hinzu, was in diesem Schritt passiert ist (z.B. "Vorspeisen-Match bestätigt"). KEINE Wiederholung von Inhalten.
-    4. **Hard Facts:** Nur aktualisieren, wenn der Kunde im Chat eine Korrektur vorgenommen hat (z.B. "Doch nur 20 Personen").
-    
-    Gib NUR das aktualisierte Markdown-Dokument zurück. Sei präzise, analytisch und fast schon gruselig gut in deiner Beobachtung.
-    """
-    
+    db = SessionLocal()
     try:
-        response = model.generate_content(prompt)
-        new_memory = response.text.strip()
-        
-        # Remove markdown ticks if present
-        if new_memory.startswith("```markdown"):
-            new_memory = new_memory[11:]
-        elif new_memory.startswith("```"):
-            new_memory = new_memory[3:]
-            
-        if new_memory.endswith("```"):
-            new_memory = new_memory[:-3]
-            
-        path.write_text(new_memory.strip(), encoding="utf-8")
-    except Exception as e:
-        print(f"[Memory] Fehler beim Updaten des Memory für {lead_id}: {e}")
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if not mem or not mem.content:
+            current_memory = init_memory(lead_id, hard_facts)
+            mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        else:
+            current_memory = mem.content
 
+        model = genai.GenerativeModel("models/gemini-2.5-flash")
+        prompt = f"""
+        Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst. 
+        Deine Aufgabe ist es, aus dem Chat-Verlauf eines Kunden (Lead) extrem präzise Erkenntnisse (Findings) zu extrahieren.
+        
+        Aktuelles Dossier:
+        ```markdown
+        {current_memory}
+        ```
+        
+        Neueste Interaktion:
+        KUNDE: "{user_message}"
+        BOT: "{bot_message}"
+        
+        DEINE MISSION:
+        1. **Psychogramm schärfen:** Wie ist die Stimmung? (Professionell, sarkastisch, gestresst?). Wie hoch ist die Kaufabsicht (Cold/Warm/Hot)? Wie gut passen wir zur Firmenkultur (Alignment)?
+        2. **Findings extrahieren:** Was wissen wir jetzt NEUES über den Kunden? (z.B. "Legt Wert auf Regionalität", "Reagiert empfindlich auf Preise", "Will die Chefin beeindrucken").
+        3. **Log kürzen:** Füge EINEN extrem kurzen Satz hinzu, was in diesem Schritt passiert ist (z.B. "Vorspeisen-Match bestätigt"). KEINE Wiederholung von Inhalten.
+        4. **Hard Facts:** Nur aktualisieren, wenn der Kunde im Chat eine Korrektur vorgenommen hat (z.B. "Doch nur 20 Personen").
+        
+        Gib NUR das aktualisierte Markdown-Dokument zurück. Sei präzise, analytisch und fast schon gruselig gut in deiner Beobachtung.
+        """
+        
+        try:
+            response = model.generate_content(prompt)
+            new_memory = response.text.strip()
+            
+            # Remove markdown ticks if present
+            if new_memory.startswith("```markdown"):
+                new_memory = new_memory[11:]
+            elif new_memory.startswith("```"):
+                new_memory = new_memory[3:]
+                
+            if new_memory.endswith("```"):
+                new_memory = new_memory[:-3]
+                
+            mem.content = new_memory.strip()
+            db.commit()
+        except Exception as e:
+            print(f"[Memory] Fehler beim Updaten des Memory für {lead_id}: {e}")
+    finally:
+        db.close()

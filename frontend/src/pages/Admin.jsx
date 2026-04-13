@@ -298,22 +298,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* DANGER ZONE */}
-              <div style={{ marginTop: '24px', padding: '16px', background: '#fff1f2', borderRadius: '12px', border: '1px solid #fecaca' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#991b1b' }}>Danger Zone: Datenbank-Reset</div>
-                    <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>Löscht alle Daten und baut das Schema neu auf. Nutze dies bei Struktur-Fehlern.</div>
-                  </div>
-                  <button 
-                    onClick={handleRebuildDB}
-                    style={{ background: '#dc2626', color: '#fff', padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    Datenbank neu aufbauen
-                  </button>
-                </div>
-              </div>
-            </div>
+              {/* DANGER ZONE REMOVED FOR SAFETY */}            </div>
 
             {/* Recharts Umsatz-Kurve */}
             <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>

@@ -97,10 +97,18 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
   useEffect(() => {
     const fetchStory = async () => {
       try {
+        // Extract dish names for the AI to use in storytelling
+        const dishNames = Object.values(menu)
+          .filter(d => d && d.name)
+          .map(d => d.name);
+
         const resp = await fetch(`${API_URL}/api/checkout/story`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lead_id: leadId })
+          body: JSON.stringify({ 
+            lead_id: leadId,
+            dishes: dishNames
+          })
         })
         if (resp.ok) {
           const data = await resp.json()

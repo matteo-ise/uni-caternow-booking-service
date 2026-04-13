@@ -69,10 +69,9 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     can_search = check_and_inc_usage("google_search", limit=500)
 
     # Nutze das stärkere Modell mit Search Grounding (nur wenn Limit nicht erreicht)
-    tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval())] if can_search else []
-    
-    model = genai.GenerativeModel(
-        "gemini-3.1-flash-lite-preview", 
+    tools = [genai.protos.Tool(google_search=genai.protos.GoogleSearch())] if can_search else []
+
+    model = genai.GenerativeModel(        "gemini-3.1-flash-lite-preview", 
         tools=tools 
     )
     
@@ -87,12 +86,14 @@ KRITISCHE AUFGABE – hq_address:
 4. Format: "Straße Hausnummer, PLZ Stadt".
 5. VERIFIZIERUNG: Falls keine ECHTE Adresse (z.B. nur eine Postfach-Adresse oder nur eine Stadt ohne Straße) gefunden wird, setze hq_address zwingend auf null. Keine fiktiven Adressen wie "Musterstraße"!
 
-Antworte NUR mit JSON, keine Markdown-Blöcke:
+WICHTIG: Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne jeglichen Markdown-Text, ohne ```json Blöcke und ohne zusätzliche Erklärungen. 
+
+Muster für deine Antwort:
 {{
   "company_name": "Exakter Firmenname laut Impressum",
   "domain": "offizielle-domain.de",
   "core_values": ["Wert1", "Wert2"],
-  "fancy_score": 1-100 (wie modern/digital ist der Auftritt?),
+  "fancy_score": 1-100 (Zahl, wie modern/digital ist der Auftritt?),
   "summary": "1 Satz Beschreibung",
   "company_colors": ["Dominante Branding-Farbe als Wort, z.B. Dunkelblau"],
   "slogan": "Offizieller Slogan oder null",
@@ -102,6 +103,8 @@ Antworte NUR mit JSON, keine Markdown-Blöcke:
     try:
         response = model.generate_content(prompt)
         text_resp = response.text.strip()
+        print(f"[Research Debug] Raw response for {search_target}: {text_resp[:100]}...")
+        
         # Basic cleaning of markdown if AI ignores instruction
         if "```json" in text_resp:
             text_resp = text_resp.split("```json")[1].split("```")[0]
@@ -110,6 +113,7 @@ Antworte NUR mit JSON, keine Markdown-Blöcke:
             
         import json
         data = json.loads(text_resp.strip())
+        print(f"[Research Debug] JSON parsed successfully for {search_target}")
         
         domain = data.get("domain", "")
         logo_url = None
@@ -132,7 +136,7 @@ Antworte NUR mit JSON, keine Markdown-Blöcke:
         _research_cache[search_target] = res
         return res
     except Exception as e:
-        print(f"[Research Error] {e}")
+        print(f"[Research Error Critical] Failed for {search_target}: {e}")
         # Return a neutral result but don't stop the flow
         return ResearchResult(
             is_business=True,

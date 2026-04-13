@@ -29,11 +29,13 @@ class FeedbackSubmit(BaseModel):
 
 class StoryRequest(BaseModel):
     lead_id: str
+    dishes: Optional[List[str]] = []
 
 @router.post("/checkout/story")
 async def get_checkout_story(req: StoryRequest):
     """Generiert ein persönliches Storytelling für den Checkout basierend auf dem Memory."""
     memory = get_memory(req.lead_id)
+    chosen_dishes = ", ".join(req.dishes) if req.dishes else "unserer Auswahl"
     
     # Default values
     hq_address = ""
@@ -83,17 +85,21 @@ async def get_checkout_story(req: StoryRequest):
 Basierend auf diesem Lead-Profil:
 {memory}
 
+AKTUELLES GEWÄHLTES MENÜ (NUTZE NUR DIESE GERICHTE!):
+{chosen_dishes}
+
 Schreibe eine persönliche, kulinarische Menü-Story für die Checkout-Seite.
 
 STRUKTUR & STIL:
 - MAXIMAL 3 SÄTZE. Sei extrem präzise und emotional.
 - NUTZE ABSÄTZE: Füge nach dem ersten oder zweiten Satz einen Doppel-Umbruch (\n\n) ein.
 - BRANDING-FOKUS: Nutze die recherchierten Firmenfarben ({company_color if company_color else 'unsere Premium-Farben'}) oder den Slogan rigeros in der Tonalität oder erwähne sie elegant (z.B. "In euren Vereinsfarben...", "Passend zu eurem Look...").
-- KULINARIK: Beschreibe kurz eine Textur oder einen Geschmack eines gewählten Gerichts.
+- KULINARIK: Beschreibe kurz eine Textur oder einen Geschmack eines gewählten Gerichts (NUTZE NUR EIN GERICHT AUS DER LISTE OBEN!).
 
 REGELN:
 - Sprich die Person persönlich an (Du wenn Fancy-Score >70, Sie wenn <70)
-- Erwähne mindestens ein konkretes Gericht oder eine Zutat
+- Erwähne mindestens ein konkretes Gericht oder eine Zutat aus der Liste OBEN.
+- Erfinde KEINE Gerichte (z.B. keinen Lachs, wenn er nicht oben steht!).
 - Ausgabe: NUR den Story-Text, kein JSON, keine Formatierung, keine umschließenden Anführungszeichen
 - Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
 """
@@ -176,9 +182,15 @@ async def submit_feedback(feedback: FeedbackSubmit, db: Session = Depends(get_db
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    real_dish_id = None
+    if feedback.dish_id:
+        dish = db.query(DBDish).filter(DBDish.csv_id == feedback.dish_id).first()
+        if dish:
+            real_dish_id = dish.id
+
     db_fb = DBFeedback(
         user_id=user.id,
-        dish_id=feedback.dish_id,
+        dish_id=real_dish_id,
         order_id=feedback.order_id,
         rating=feedback.rating,
         comment=feedback.comment,
@@ -187,8 +199,8 @@ async def submit_feedback(feedback: FeedbackSubmit, db: Session = Depends(get_db
     db.add(db_fb)
     db.commit()
 
-    if not feedback.is_general and feedback.dish_id and feedback.comment:
-        dish = db.query(DBDish).filter(DBDish.id == feedback.dish_id).first()
+    if not feedback.is_general and real_dish_id and feedback.comment:
+        dish = db.query(DBDish).filter(DBDish.id == real_dish_id).first()
         if dish:
             existing_fb = dish.feedback_context or ""
             new_fb = f"{existing_fb} | {feedback.comment}".strip(" |")

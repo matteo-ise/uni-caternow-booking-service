@@ -139,12 +139,19 @@ async def chat(req: ChatRequest):
                     if dish_name:
                         official_dish = _get_official_dish(dish_name, db)
                         if official_dish:
+                            # Suche den echten AI Match % in den ursprünglichen RAG Ergebnissen
+                            sim_score = 0.95 # Fallback, falls es direkt über Fuzzy gefunden wurde
+                            for d in similar_dishes:
+                                if d.name == official_dish.name:
+                                    sim_score = d.similarity_score
+                                    break
+                            
                             verified_menu[frontend_key] = {
                                 "id": official_dish.csv_id,
                                 "name": official_dish.name,
                                 "preis": official_dish.preis,
                                 "image_url": official_dish.image_url,
-                                "similarity_score": 0.99
+                                "similarity_score": sim_score
                             }
                 db.close()
                 
