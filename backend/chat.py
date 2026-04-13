@@ -21,7 +21,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
 
 router = APIRouter()
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL = "gemini-2.0-flash"
+
+# Lead-level research cache to avoid re-researching on every message
+_lead_research_cache = {}
 
 BASE_SYSTEM_PROMPT = """Du bist Catersmart Chatty, der charmanteste Menü-Verkäufer der Welt.
 
@@ -33,6 +36,7 @@ STRIKTE REGELN:
 - STORYTELLING: Baue ein Narrativ um das Event (z.B. "Passend zu eurer DNA bei [Firma]...").
 - MULTI-MESSAGES: Nutze "|||", um Nachrichten für eine bessere Dynamik zu trennen.
 - UPSELLING: Sobald HP1 steht, biete HP2 an.
+- BESTAETIGTE GERICHTE: Wenn der Kunde einen Gang bereits bestätigt hat, schlage KEINEN Ersatz dafür vor. Ändere nur unbestätigte Gänge.
 
 MISSION:
 1. Schlage Gerichte vor (sie erscheinen rechts).
@@ -70,7 +74,11 @@ async def chat(req: ChatRequest):
     hard_facts = wizardData.model_dump() if wizardData else {}
 
     if wizardData and wizardData.customerType == "business":
-        research = run_company_research(wizardData.companyName)
+        if leadId in _lead_research_cache:
+            research = _lead_research_cache[leadId]
+        else:
+            research = run_company_research(wizardData.companyName)
+            _lead_research_cache[leadId] = research
         hard_facts.update(research.model_dump())
         system_prompt += f"\n**RESEARCH DATA:** {research.company_name}, Score: {research.fancy_score}/100, HQ Adresse: {research.hq_address}, Logo: {research.logo_url}"
         # Persist research data so the checkout story endpoint can read it reliably

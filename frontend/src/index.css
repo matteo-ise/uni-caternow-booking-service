@@ -873,6 +873,34 @@ button { font-family: var(--font); cursor: pointer; }
   line-height: 1.2;
 }
 
+.service-custom-wish {
+  margin-top: 12px;
+}
+
+.service-custom-wish__input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  font-family: var(--font);
+  font-size: 0.88rem;
+  color: #1e293b;
+  resize: vertical;
+  min-height: 48px;
+  transition: border-color 0.2s ease;
+}
+
+.service-custom-wish__input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(3, 122, 139, 0.1);
+}
+
+.service-custom-wish__input::placeholder {
+  color: #94a3b8;
+}
+
 .service-skip-btn {
   display: flex;
   align-items: center;

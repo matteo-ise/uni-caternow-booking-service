@@ -53,7 +53,20 @@ def init_db():
                 print(f"[Database] Warnung beim Aktivieren von pgvector: {e}")
     
     # Import hier, um Zirkulär-Imports zu vermeiden
-    import db_models 
+    import db_models
     Base.metadata.create_all(bind=engine)
+
+    # Schema migrations for existing tables (create_all doesn't add columns to existing tables)
+    if not DATABASE_URL.startswith("sqlite"):
+        migrations = [
+            ("memories", "sidecar_data", "ALTER TABLE memories ADD COLUMN IF NOT EXISTS sidecar_data TEXT"),
+            ("memories", "updated_at", "ALTER TABLE memories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"),
+        ]
+        for table, column, sql in migrations:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+            except Exception as e:
+                print(f"[Database] Migration note for {table}.{column}: {e}")
 
 

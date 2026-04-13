@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ProgressTimeline from './ProgressTimeline'
 import Step1Wizard      from './Step1Wizard'
@@ -22,6 +22,10 @@ export default function ChatModal({ isOpen, onClose }) {
   const [menuOptions,      setMenuOptions]  = useState({ vorspeise: [], hauptspeise1: [], hauptspeise2: [], nachspeise: [] })
   const [menu,             setMenu]         = useState({ vorspeise: null, hauptspeise1: null, hauptspeise2: null, nachspeise: null })
   const [selectedServices, setServices]     = useState([])
+  const [customWish,       setCustomWish]  = useState('')
+  const [confirmedCourses, setConfirmedCourses] = useState({ vorspeise: false, hauptspeise1: false, hauptspeise2: false, nachspeise: false })
+  const confirmedRef = useRef(confirmedCourses)
+  useEffect(() => { confirmedRef.current = confirmedCourses }, [confirmedCourses])
 
   const leadId = useMemo(() => {
     const name = currentUser?.displayName?.replace(/\s/g, '') || 'guest'
@@ -128,7 +132,16 @@ export default function ChatModal({ isOpen, onClose }) {
       if (verifiedMatch) {
         try {
           const verifiedData = JSON.parse(verifiedMatch[1].trim())
-          setMenu(prev => ({ ...prev, ...verifiedData }))
+          const currentConfirmed = confirmedRef.current
+          setMenu(prev => {
+            const updated = { ...prev }
+            for (const [key, value] of Object.entries(verifiedData)) {
+              if (!currentConfirmed[key]) {
+                updated[key] = value
+              }
+            }
+            return updated
+          })
         } catch (e) { console.error("Verified JSON Error", e) }
       } else if (aiMatch) {
         try {
@@ -140,12 +153,13 @@ export default function ChatModal({ isOpen, onClose }) {
             nachspeise: data.dessert?.alternativen || (data.dessert ? [data.dessert] : []),
           }
           setMenuOptions(newOptions)
-          setMenu({
-            vorspeise: data.vorspeise || null,
-            hauptspeise1: data.hauptgericht1 || null,
-            hauptspeise2: data.hauptgericht2 || null,
-            nachspeise: data.dessert || null
-          })
+          const currentConfirmed = confirmedRef.current
+          setMenu(prev => ({
+            vorspeise: currentConfirmed.vorspeise ? prev.vorspeise : (data.vorspeise || null),
+            hauptspeise1: currentConfirmed.hauptspeise1 ? prev.hauptspeise1 : (data.hauptgericht1 || null),
+            hauptspeise2: currentConfirmed.hauptspeise2 ? prev.hauptspeise2 : (data.hauptgericht2 || null),
+            nachspeise: currentConfirmed.nachspeise ? prev.nachspeise : (data.dessert || null),
+          }))
         } catch (e) { console.error("AI JSON Error", e) }
       }
 
@@ -186,7 +200,30 @@ export default function ChatModal({ isOpen, onClose }) {
     setQuickReplies(['Geschirr/Besteck', 'Gläser', 'Dekoration', 'Personal (z. B. Servicekräfte, Barkeeper)', 'Mietmöbel (z. B. Tische, Stühle)', 'Nein, danke'])
   }
 
-  function handleWeiter() { setStep(4) }
+  const [checkoutId, setCheckoutId] = useState(null)
+
+  async function handleWeiter() {
+    setStep(4)
+    try {
+      const resp = await fetch(`${API_URL}/api/checkouts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: leadId,
+          menu: menu,
+          wizard_data: wizardData,
+          selected_services: selectedServices,
+          custom_wish: customWish,
+        })
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setCheckoutId(data.checkout_id)
+      }
+    } catch (err) {
+      console.error('Checkout creation failed:', err)
+    }
+  }
   function handleNavigate(targetStep) { setStep(targetStep) }
   async function handleSubmit(finalData = {}) {
     if (!currentUser) return
@@ -202,6 +239,7 @@ export default function ChatModal({ isOpen, onClose }) {
           event_details: wizardData,
           contact: { name: finalData.name, email: finalData.email, address: finalData.address },
           additionalNotes: finalData.additionalNotes,
+          customWish: customWish,
         }
       }
       const resp = await fetch(`${API_URL}/api/orders`, {
@@ -248,10 +286,12 @@ export default function ChatModal({ isOpen, onClose }) {
                   customerType={wizardData.customerType}
                   selectedServices={selectedServices}
                   step={step}
+                  customWish={customWish}
+                  onCustomWishChange={setCustomWish}
                 />
               </div>
               <div className="chat-layout__right">
-                <MenuCanvas menuOptions={menuOptions} menu={menu} onSelect={handleMenuSelect} onConfirm={handleMenuConfirm} step={step} onWeiter={handleWeiter} />
+                <MenuCanvas menuOptions={menuOptions} menu={menu} onSelect={handleMenuSelect} onConfirm={handleMenuConfirm} step={step} onWeiter={handleWeiter} confirmed={confirmedCourses} setConfirmed={setConfirmedCourses} />
                 {step === 3 && <button className="btn-filled canvas__weiter canvas__weiter--desktop" onClick={handleWeiter}>Bestellung prüfen →</button>}
               </div>
             </div>
@@ -259,12 +299,14 @@ export default function ChatModal({ isOpen, onClose }) {
           {step === 4 && (
             <Step4Final 
               menu={menu} 
-              selectedServices={selectedServices} 
-              wizardData={wizardData} 
+              selectedServices={selectedServices}
+              customWish={customWish}
+              wizardData={wizardData}
               onSubmit={handleSubmit} 
               userEmail={currentUser?.email} 
               userName={currentUser?.displayName}
               leadId={leadId}
+              checkoutId={checkoutId}
             />
           )}
           {step === 5 && (

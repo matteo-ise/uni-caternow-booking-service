@@ -21,6 +21,7 @@ from sync_logic import get_file_hash
 from chat import router as chat_router
 from admin import router as admin_router
 from orders import router as orders_router
+from checkouts import router as checkouts_router
 from auth import get_current_user
 
 # Logger setup
@@ -74,6 +75,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 app.include_router(chat_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
+app.include_router(checkouts_router, prefix="/api")
 
 @app.post("/api/users/sync")
 async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session = Depends(get_db)):

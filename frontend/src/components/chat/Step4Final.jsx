@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { API_URL } from '../../config'
 import DishImage from './DishImage'
+import generatePDF from '../../utils/generatePDF'
 
 const COURSE_META = [
   { key: 'vorspeise',    label: 'Vorspeise',     fallbackImg: 'https://images.unsplash.com/photo-1626808642875-0aa545482dfb?auto=format&fit=crop&w=480&q=80' },
@@ -40,10 +41,11 @@ function Accordion({ title, children, defaultOpen = false }) {
   );
 }
 
-export default function Step4Final({ menu, selectedServices, wizardData, onSubmit, userEmail, userName, leadId }) {
+export default function Step4Final({ menu, selectedServices, customWish, wizardData, onSubmit, userEmail, userName, leadId, checkoutId }) {
   const [editing, setEditing] = useState(false)
   const [local, setLocal]     = useState({ ...wizardData })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   
   // Delivery Setup State
   const [withSetup, setWithSetup] = useState(true)
@@ -352,13 +354,18 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
           </div>
 
           <Accordion title="Services & Logistik" defaultOpen={true}>
-            {selectedServices.length > 0 ? (
+            {selectedServices.length > 0 || customWish ? (
               <div className="final__services-list">
                 {selectedServices.map(s => (
                   <span key={s} className="final__service-tag">
                     {SERVICE_ICONS[s] || '✓'} {s}
                   </span>
                 ))}
+                {customWish && (
+                  <span className="final__service-tag" style={{ background: '#fef3c7', borderColor: '#f59e0b' }}>
+                    ✍️ {customWish}
+                  </span>
+                )}
               </div>
             ) : (
               <p>Keine zusätzlichen Services ausgewählt.</p>
@@ -399,16 +406,6 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         </p>
       </div>
 
-      {/* Easter Egg / Osterei - Outside the box */}
-      <div className="easter-egg-container" style={{ marginTop: '40px', textAlign: 'center' }}>
-        <div className="pulsing-egg" style={{ fontSize: '4rem', cursor: 'pointer', display: 'inline-block' }} title="Happy Easter!">
-          🥚✨
-        </div>
-        <p style={{ fontSize: '1.2rem', color: '#037A8B', fontWeight: 800, marginTop: '12px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-          Happy Easter
-        </p>
-      </div>
-
       <style>{`
         .loading-spinner {
           width: 18px;
@@ -420,13 +417,6 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
         }
         @keyframes spin {
           to { transform: rotate(360deg); }
-        }
-        .pulsing-egg {
-          animation: egg-float 3s infinite ease-in-out;
-        }
-        @keyframes egg-float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-15px) rotate(8deg); }
         }
         .ai-glow-pulse {
           animation: ai-glow 1s ease-in-out infinite alternate;
@@ -443,21 +433,80 @@ export default function Step4Final({ menu, selectedServices, wizardData, onSubmi
       {/* ── Absenden ─────────────────────────────────────────── */}
       <div className="final__footer">
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0 }}>* Pflichtfelder. Bitte fülle Name, E-Mail und Adresse aus.</p>
-        <button 
-          className={`btn-filled btn-filled--lg ${!canSubmit ? 'btn-disabled' : ''}`} 
-          onClick={handleFinalSubmit} 
-          disabled={!canSubmit}
-          style={{ width: '100%', maxWidth: '400px' }}
-        >
-          {isSubmitting ? (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-              <span className="loading-spinner"></span>
-              Anfrage wird gesendet...
-            </span>
-          ) : (
-            `Jetzt anfragen: ${priceStats.total.toFixed(2)} € →`
+        <div style={{ display: 'flex', gap: '12px', width: '100%', maxWidth: '500px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button
+            className={`btn-filled btn-filled--lg ${!canSubmit ? 'btn-disabled' : ''}`}
+            onClick={handleFinalSubmit}
+            disabled={!canSubmit}
+            style={{ flex: '1 1 280px' }}
+          >
+            {isSubmitting ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <span className="loading-spinner"></span>
+                Anfrage wird gesendet...
+              </span>
+            ) : (
+              `Jetzt anfragen: ${priceStats.total.toFixed(2)} \u20AC \u2192`
+            )}
+          </button>
+          {checkoutId && (
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/checkout/${checkoutId}`
+                navigator.clipboard.writeText(url)
+                setLinkCopied(true)
+                setTimeout(() => setLinkCopied(false), 2000)
+              }}
+              style={{
+                flex: '0 0 auto',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                border: '1.5px solid #e2e8f0',
+                background: linkCopied ? '#f0fdf4' : '#fff',
+                color: linkCopied ? '#166534' : '#475569',
+                fontWeight: 700,
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                fontFamily: 'Montserrat, sans-serif',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {linkCopied ? 'Kopiert! \u2713' : 'Link kopieren'}
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => {
+              const checkoutUrl = checkoutId ? `${window.location.origin}/checkout/${checkoutId}` : null
+              generatePDF({
+                menu,
+                quantities,
+                priceStats,
+                wizardData: display,
+                selectedServices,
+                customWish,
+                contactInfo: { name, email, address },
+                checkoutUrl,
+              })
+            }}
+            style={{
+              flex: '0 0 auto',
+              padding: '12px 20px',
+              borderRadius: '12px',
+              border: '1.5px solid #e2e8f0',
+              background: '#fff',
+              color: '#475569',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              fontFamily: 'Montserrat, sans-serif',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            PDF herunterladen
+          </button>
+        </div>
       </div>
     </div>
   )

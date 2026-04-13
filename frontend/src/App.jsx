@@ -4,8 +4,9 @@ import Navbar      from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import ChatButton  from './components/ChatButton'
 import ChatModal   from './components/chat/ChatModal'
-import Admin       from './pages/Admin'
-import Profile     from './pages/Profile'
+import Admin        from './pages/Admin'
+import Profile      from './pages/Profile'
+import CheckoutPage from './pages/CheckoutPage'
 import { useAuth } from './context/AuthContext'
 import { API_URL } from './config'
 
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/checkout/:checkoutId" element={<CheckoutPage />} />
       </Routes>
     </Router>
   )

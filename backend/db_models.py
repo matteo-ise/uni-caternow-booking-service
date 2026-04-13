@@ -87,6 +87,17 @@ class DBUsageStats(Base):
     count = Column(Integer, default=0)
     last_reset = Column(DateTime(timezone=True), server_default=func.now())
 
+class DBCheckout(Base):
+    __tablename__ = "checkouts"
+    id = Column(Integer, primary_key=True, index=True)
+    checkout_id = Column(String, unique=True, index=True, nullable=False)
+    lead_id = Column(String, index=True, nullable=False)
+    menu = Column(Text, nullable=False)
+    wizard_data = Column(Text, nullable=False)
+    selected_services = Column(Text, nullable=True)
+    custom_wish = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class DBMemory(Base):
     __tablename__ = "memories"
     id = Column(Integer, primary_key=True)

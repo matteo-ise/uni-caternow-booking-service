@@ -38,5 +38,8 @@ backend/embeddings_cache/
 ~$*.xls
 .ipynb_checkpoints/
 
+# Vite cache
+.vite/
+
 # Logs
 *.log

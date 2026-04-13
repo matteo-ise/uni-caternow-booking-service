@@ -1,6 +1,7 @@
 import os
 import google.generativeai as genai
 from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import re
 
 class ResearchResult(BaseModel):
@@ -69,10 +70,17 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     can_search = check_and_inc_usage("google_search", limit=500)
 
     # Nutze das stärkere Modell mit Search Grounding (nur wenn Limit nicht erreicht)
-    tools = [genai.protos.Tool(google_search=genai.protos.GoogleSearch())] if can_search else []
+    if can_search:
+        if hasattr(genai.protos, 'GoogleSearch'):
+            tools = [genai.protos.Tool(google_search=genai.protos.GoogleSearch())]
+        else:
+            tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval())]
+    else:
+        tools = []
 
-    model = genai.GenerativeModel(        "gemini-3.1-flash-lite-preview", 
-        tools=tools 
+    model = genai.GenerativeModel(
+        "gemini-2.0-flash",
+        tools=tools
     )
     
     prompt = f"""Recherchiere jetzt aktiv die Firma "{search_target}" über Google Search.
@@ -100,8 +108,13 @@ Muster für deine Antwort:
   "hq_address": "Straße Hausnr, PLZ Ort (NUR WENN VERIFIZIERT!) oder null"
 }}"""
 
+    def _call_gemini():
+        return model.generate_content(prompt)
+
     try:
-        response = model.generate_content(prompt)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_call_gemini)
+            response = future.result(timeout=15)
         text_resp = response.text.strip()
         print(f"[Research Debug] Raw response for {search_target}: {text_resp[:100]}...")
         
@@ -135,9 +148,21 @@ Muster für deine Antwort:
         )
         _research_cache[search_target] = res
         return res
+    except FuturesTimeoutError:
+        print(f"[Research Timeout] Research for {search_target} exceeded 15s, returning neutral result")
+        res = ResearchResult(
+            is_business=True,
+            company_name=search_target,
+            core_values=["Innovation"],
+            fancy_score=50,
+            summary="Recherche-Timeout. Unternehmen wird im Hintergrund analysiert.",
+            company_colors=["Grau"],
+            slogan=None
+        )
+        _research_cache[search_target] = res
+        return res
     except Exception as e:
         print(f"[Research Error Critical] Failed for {search_target}: {e}")
-        # Return a neutral result but don't stop the flow
         return ResearchResult(
             is_business=True,
             company_name=search_target,

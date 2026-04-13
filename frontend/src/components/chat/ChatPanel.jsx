@@ -39,7 +39,9 @@ export default function ChatPanel({
   isGlow,
   customerType,
   selectedServices = [],
-  step
+  step,
+  customWish = '',
+  onCustomWishChange
 }) {
   const { currentUser } = useAuth()
   const bottomRef = useRef(null)
@@ -181,6 +183,19 @@ export default function ChatPanel({
                 )
               })}
             </div>
+            {/* Sonderwünsche Freitextfeld */}
+            <div className="service-custom-wish">
+              <textarea
+                className="service-custom-wish__input"
+                placeholder="Sonderwünsche eingeben (z.B. vegane Optionen, Allergien, spezielle Deko-Wünsche...)"
+                value={customWish}
+                onChange={e => onCustomWishChange(e.target.value)}
+                disabled={isWaiting}
+                rows={2}
+                maxLength={500}
+              />
+            </div>
+
             <button
               className="service-skip-btn"
               onClick={() => onQuickReply('Nein, danke')}

@@ -90,16 +90,23 @@ async def update_order_status(order_id: int, data: OrderStatusUpdate, db: Sessio
 
 @router.get("/admin/feedbacks")
 async def get_all_feedbacks(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
-    feedbacks = db.query(DBFeedback, DBDish).outerjoin(DBDish, DBFeedback.dish_id == DBDish.id).order_by(DBFeedback.created_at.desc()).all()
+    feedbacks = db.query(DBFeedback).order_by(DBFeedback.created_at.desc()).all()
     result = []
-    for fb, dish in feedbacks:
+    for fb in feedbacks:
+        dish_name = None
+        if fb.dish_id:
+            dish = db.query(DBDish).filter(DBDish.id == fb.dish_id).first()
+            if not dish:
+                dish = db.query(DBDish).filter(DBDish.csv_id == fb.dish_id).first()
+            if dish:
+                dish_name = dish.name
         result.append({
             "id": fb.id,
             "rating": fb.rating,
             "comment": fb.comment,
             "is_general": fb.is_general,
             "created_at": fb.created_at,
-            "dish_name": dish.name if dish else None
+            "dish_name": dish_name
         })
     return result
 

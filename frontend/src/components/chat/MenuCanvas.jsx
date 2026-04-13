@@ -18,9 +18,8 @@ const SECTIONS = [
   { key: 'nachspeise',   label: 'Nachspeise', icon: '🍮', kpi: 'Sweet Finish' },
 ]
 
-export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, step, onWeiter }) {
+export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, step, onWeiter, confirmed, setConfirmed }) {
   const isMobile = useIsMobile()
-  const [confirmed, setConfirmed] = useState({ vorspeise: false, hauptspeise1: false, hauptspeise2: false, nachspeise: false })
   const [indices, setIndices] = useState({ vorspeise: 0, hauptspeise1: 0, hauptspeise2: 0, nachspeise: 0 })
 
   const showH2 = menu['hauptgericht2'] || confirmed['hauptspeise1']
