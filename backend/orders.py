@@ -79,7 +79,7 @@ async def get_checkout_story(req: StoryRequest):
         }
         heart = next((h for k, h in color_to_heart.items() if k in company_color), "🤍")
 
-        model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""Du bist ein kulinarischer Storyteller für CaterNow, ein Premium-Catering-Service.
 
 Basierend auf diesem Lead-Profil:

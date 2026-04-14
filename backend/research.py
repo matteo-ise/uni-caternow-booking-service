@@ -79,7 +79,7 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
         tools = []
 
     model = genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-2.5-flash",
         tools=tools
     )
     
