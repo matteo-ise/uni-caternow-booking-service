@@ -2,9 +2,10 @@ import asyncio
 import os
 import pandas as pd
 import numpy as np
-import google.generativeai as genai
 import logging
 import difflib
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 from sqlalchemy import text
 
@@ -16,7 +17,16 @@ from sync_logic import get_file_hash
 logger = logging.getLogger("CaterNow-Search")
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+_client: genai.Client | None = None
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(
+            api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        )
+    return _client
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "CaterNow_Data_master.xlsx")
 EMBEDDING_MODEL = "models/gemini-embedding-001"
@@ -151,7 +161,7 @@ async def load_and_embed_dishes(force_refresh=False):
                         tenant_id="default"
                     ))
 
-                if rich_texts_to_embed:
+                if rich_texts_to_embed and objects_to_add:
                     await process_embedding_batch(db, objects_to_add, rich_texts_to_embed, i)
 
         # PART 2: Fix existing zero vectors
@@ -166,9 +176,9 @@ async def load_and_embed_dishes(force_refresh=False):
 async def process_embedding_batch(db, objects_to_add, rich_texts_to_embed, batch_idx):
     for attempt in range(3):
         try:
-            res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts_to_embed)
-            for idx, vec in enumerate(res["embedding"]):
-                objects_to_add[idx].embedding = vec
+            res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_texts_to_embed)
+            for idx, emb in enumerate(res.embeddings):
+                objects_to_add[idx].embedding = emb.values
             db.add_all(objects_to_add)
             db.commit()
             logger.info(f"Vektorisierte Batch ({batch_idx//10 + 1}): {len(objects_to_add)} Gerichte.")
@@ -210,9 +220,9 @@ async def fix_zero_vectors(db):
         rich_texts = [build_rich_description(d) for d in batch]
         
         try:
-            res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_texts)
-            for idx, vec in enumerate(res["embedding"]):
-                batch[idx].embedding = vec
+            res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_texts)
+            for idx, emb in enumerate(res.embeddings):
+                batch[idx].embedding = emb.values
             db.commit()
             logger.info(f"Fixed {len(batch)} zero vectors.")
             await asyncio.sleep(5.0) # Slow and steady
@@ -225,8 +235,8 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
     db = SessionLocal()
     results = []
     try:
-        res = genai.embed_content(model=EMBEDDING_MODEL, content=query)
-        qvec = res["embedding"]
+        res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=query)
+        qvec = res.embeddings[0].values
         qobj = db.query(DBDish, (1 - DBDish.embedding.cosine_distance(qvec)).label("sim"))
         if kategorie:
             qobj = qobj.filter(DBDish.kategorie == kategorie)
@@ -267,8 +277,8 @@ async def re_embed_dish_async(dish_id: int):
         dish = db.query(DBDish).filter(DBDish.id == dish_id).first()
         if dish:
             rich_desc = build_rich_description(dish)
-            res = genai.embed_content(model=EMBEDDING_MODEL, content=rich_desc)
-            dish.embedding = res["embedding"]
+            res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_desc)
+            dish.embedding = res.embeddings[0].values
             dish.feedback_context = rich_desc
             db.commit()
     except Exception as e:

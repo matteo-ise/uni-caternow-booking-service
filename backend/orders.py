@@ -1,7 +1,10 @@
+import os
 import json
 import threading
 import re
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -12,6 +15,18 @@ from db_models import DBOrder, DBFeedback, DBDish, DBUser
 from auth import get_current_user, get_optional_user
 from embeddings import re_embed_dish
 from memory import get_memory, get_research_sidecar
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+_client: genai.Client | None = None
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(
+            api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        )
+    return _client
 
 router = APIRouter()
 
@@ -86,7 +101,6 @@ async def get_checkout_story(req: StoryRequest):
         }
         heart = next((h for k, h in color_to_heart.items() if k in company_color), "🤍")
 
-        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""Du bist ein kulinarischer Storyteller für CaterNow, ein Premium-Catering-Service.
 
 Basierend auf diesem Lead-Profil:
@@ -111,7 +125,10 @@ REGELN:
 - Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
 """
         try:
-            response = model.generate_content(prompt)
+            response = _get_client().models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
             story = response.text.strip().strip('"')
         except:
             pass

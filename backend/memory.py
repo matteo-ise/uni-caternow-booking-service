@@ -1,8 +1,23 @@
+import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pydantic import BaseModel
+from dotenv import load_dotenv
 from database import SessionLocal
 from db_models import DBMemory
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+_client: genai.Client | None = None
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(
+            api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        )
+    return _client
 
 class UpdateMemoryRequest(BaseModel):
     lead_id: str
@@ -102,7 +117,6 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
         else:
             current_memory = mem.content
 
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
         prompt = f"""
         Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst. 
         Deine Aufgabe ist es, aus dem Chat-Verlauf eines Kunden (Lead) extrem präzise Erkenntnisse (Findings) zu extrahieren.
@@ -126,7 +140,10 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
         """
         
         try:
-            response = model.generate_content(prompt)
+            response = _get_client().models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
             new_memory = response.text.strip()
             
             # Remove markdown ticks if present

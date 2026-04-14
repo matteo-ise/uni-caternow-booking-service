@@ -283,7 +283,17 @@ export default function ChatModal({ isOpen, onClose }) {
           )}
         </div>
         <div className="modal__content">
-          {step === 1 && <Step1Wizard onNext={data => { setWizardData(data); setStep(2) }} onClose={handleClose} />}
+          {step === 1 && <Step1Wizard onNext={data => {
+            setWizardData(data)
+            setStep(2)
+            if (data.customerType === 'business' && data.companyName) {
+              fetch(`${API_URL}/api/research/prefetch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadId, companyName: data.companyName }),
+              }).catch(() => {})
+            }
+          }} onClose={handleClose} />}
           {(step === 2 || step === 3) && (
             <div className="chat-layout">
               <div className="chat-layout__left">
