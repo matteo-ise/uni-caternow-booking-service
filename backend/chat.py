@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import threading
 import re
 from fastapi import APIRouter, HTTPException
@@ -96,15 +97,20 @@ async def prefetch_research(req: PrefetchRequest):
         try:
             print(f"[Prefetch] Starting background research for {company_name} (lead={lead_id})")
             research = run_company_research(company_name)
-            _lead_research_cache[lead_id] = research
-            save_research_sidecar(lead_id, {
-                "hq_address": research.hq_address,
-                "logo_url": research.logo_url,
-                "company_name": research.company_name,
-                "fancy_score": research.fancy_score,
-                "company_colors": research.company_colors,
-            })
-            print(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
+            # Only cache a successful result — grey/fallback results mean Gemini failed
+            is_real_result = research.company_colors != ["Grau"]
+            if is_real_result:
+                _lead_research_cache[lead_id] = research
+                save_research_sidecar(lead_id, {
+                    "hq_address": research.hq_address,
+                    "logo_url": research.logo_url,
+                    "company_name": research.company_name,
+                    "fancy_score": research.fancy_score,
+                    "company_colors": research.company_colors,
+                })
+                print(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
+            else:
+                print(f"[Prefetch] Research returned fallback for {company_name} (likely 503), not caching so next request retries")
         except Exception as e:
             print(f"[Prefetch Error] {company_name} (lead={lead_id}): {e}")
         finally:
@@ -178,28 +184,42 @@ async def chat(req: ChatRequest):
 
     async def stream_generator():
         full_reply = ""
-        try:
-            history = [
-                types.Content(role=m.role, parts=[types.Part(text=m.content)])
-                for m in conversation[:-1]
-            ]
-            chat_session = _get_client().chats.create(
-                model=GEMINI_MODEL,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt + "\n\n" + dishes_context,
-                ),
-                history=history,
-            )
-            for chunk in chat_session.send_message_stream(last_user_msg):
-                token = chunk.text
-                full_reply += token
-                yield token
-        except Exception as e:
-            print(f"[Chat Critical] {e}")
-            if "429" in str(e):
-                yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
-            else:
-                yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
+        history = [
+            types.Content(role=m.role, parts=[types.Part(text=m.content)])
+            for m in conversation[:-1]
+        ]
+        chat_config = types.GenerateContentConfig(
+            system_instruction=system_prompt + "\n\n" + dishes_context,
+        )
+
+        # Retry up to 2 times on 503 (Gemini overload)
+        MAX_STREAM_RETRIES = 2
+        stream_success = False
+        for attempt in range(MAX_STREAM_RETRIES + 1):
+            try:
+                chat_session = _get_client().chats.create(
+                    model=GEMINI_MODEL,
+                    config=chat_config,
+                    history=history,
+                )
+                for chunk in chat_session.send_message_stream(last_user_msg):
+                    token = chunk.text
+                    full_reply += token
+                    yield token
+                stream_success = True
+                break
+            except Exception as e:
+                if "503" in str(e) and attempt < MAX_STREAM_RETRIES:
+                    wait = 4 * (attempt + 1)
+                    print(f"[Chat] 503 on attempt {attempt + 1}, retrying in {wait}s...")
+                    await asyncio.sleep(wait)
+                else:
+                    print(f"[Chat Critical] {e}")
+                    if "429" in str(e):
+                        yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
+                    else:
+                        yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
+                    break
 
         # ── VERIFICATION LAYER (Snap-Back Logic) ──
         match = re.search(r"\[MENU_JSON\](.*?)\[/MENU_JSON\]", full_reply, re.DOTALL)

@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import time
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -122,10 +123,51 @@ Muster für deine Antwort:
             config=config,
         )
 
+    # ── Step 1: call Gemini with retry on 503 ──────────────────────────────────
+    response = None
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_call_gemini)
+                response = future.result(timeout=25)
+            break  # success
+        except FuturesTimeoutError:
+            print(f"[Research Timeout] {search_target} exceeded 25s")
+            res = ResearchResult(
+                is_business=True,
+                company_name=search_target,
+                core_values=["Innovation"],
+                fancy_score=50,
+                summary="Recherche-Timeout.",
+                company_colors=["Grau"],
+                slogan=None,
+            )
+            _research_cache[search_target] = res
+            return res
+        except Exception as e:
+            if "503" in str(e) and attempt < MAX_RETRIES - 1:
+                wait = 5 * (attempt + 1)
+                print(f"[Research] 503 on attempt {attempt + 1}, retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                print(f"[Research Error Critical] Failed for {search_target}: {e}")
+                # Do NOT cache — let the next request retry
+                return ResearchResult(
+                    is_business=True,
+                    company_name=search_target,
+                    core_values=["Innovation"],
+                    fancy_score=50,
+                    summary="Unternehmen im Analyse-Modus.",
+                    company_colors=["Grau"],
+                    slogan=None,
+                )
+
+    if response is None:
+        return ResearchResult(is_business=True, company_name=search_target)
+
+    # ── Step 2: parse JSON response ────────────────────────────────────────────
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_call_gemini)
-            response = future.result(timeout=20)
         text_resp = response.text.strip()
         print(f"[Research Debug] Raw response for {search_target}: {text_resp[:120]}...")
 
@@ -156,21 +198,8 @@ Muster für deine Antwort:
         )
         _research_cache[search_target] = res
         return res
-    except FuturesTimeoutError:
-        print(f"[Research Timeout] Research for {search_target} exceeded 20s, returning neutral result")
-        res = ResearchResult(
-            is_business=True,
-            company_name=search_target,
-            core_values=["Innovation"],
-            fancy_score=50,
-            summary="Recherche-Timeout. Unternehmen wird im Hintergrund analysiert.",
-            company_colors=["Grau"],
-            slogan=None,
-        )
-        _research_cache[search_target] = res
-        return res
     except Exception as e:
-        print(f"[Research Error Critical] Failed for {search_target}: {e}")
+        print(f"[Research Parse Error] {search_target}: {e}")
         return ResearchResult(
             is_business=True,
             company_name=search_target,
