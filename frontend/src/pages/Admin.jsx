@@ -17,17 +17,33 @@ export default function Admin() {
   
   const [selectedLead, setSelectedLead] = useState(null)
   const [memoryContent, setMemoryContent] = useState('')
-  const [memorySubTab, setMemorySubTab] = useState('dossier')
+  const [memorySubTab, setMemorySubTab] = useState('overview')
   const [leadSidecar, setLeadSidecar] = useState(null)
   const [benchmarkQuery, setBenchmarkQuery] = useState('')
   const [benchmarkResults, setBenchmarkResults] = useState(null)
   const [benchmarkLoading, setBenchmarkLoading] = useState(false)
+
+  // User Editor state
+  const [users, setUsers] = useState([])
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [userMemoryContent, setUserMemoryContent] = useState('')
+
+  // Overview state
+  const [overviewData, setOverviewData] = useState([])
+  const [overviewDate, setOverviewDate] = useState(new Date().toISOString().split('T')[0])
+  const [overviewLoading, setOverviewLoading] = useState(false)
 
   useEffect(() => {
     if (isAuthorized) {
       fetchAllData()
     }
   }, [isAuthorized])
+
+  useEffect(() => {
+    if (isAuthorized && activeTab === 'memory' && memorySubTab === 'overview') {
+      fetchOverview(overviewDate)
+    }
+  }, [activeTab, memorySubTab])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -72,7 +88,8 @@ export default function Admin() {
       fetchLeads(),
       fetchOrders(),
       fetchFeedbacks(),
-      fetchDishes()
+      fetchDishes(),
+      fetchUsers(),
     ])
   }
 
@@ -104,6 +121,49 @@ export default function Admin() {
       const resp = await fetch(`${API_URL}/api/admin/dishes`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) setDishes(await resp.json())
     } catch (err) { console.error(err) }
+  }
+
+  const fetchUsers = async () => {
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/users`, { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setUsers(await resp.json())
+    } catch (err) { console.error(err) }
+  }
+
+  const fetchUserMemory = async (uid) => {
+    setSelectedUser(uid)
+    setUserMemoryContent('')
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/user-memory/${uid}`, { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) {
+        const data = await resp.json()
+        setUserMemoryContent(data.content || '')
+      }
+    } catch (err) { console.error(err) }
+  }
+
+  const saveUserMemory = async () => {
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/user-memory/${selectedUser}`, {
+        method: 'PUT',
+        headers: { 'X-Admin-Token': getAdminToken(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: userMemoryContent })
+      })
+      if (resp.ok) alert('User-Profil gespeichert! Wird ab sofort in KI-Konversationen berücksichtigt.')
+      else alert('Fehler beim Speichern.')
+    } catch (err) { alert('Netzwerkfehler') }
+  }
+
+  const fetchOverview = async (date) => {
+    setOverviewLoading(true)
+    try {
+      const url = date
+        ? `${API_URL}/api/admin/orders-overview?date=${date}`
+        : `${API_URL}/api/admin/orders-overview`
+      const resp = await fetch(url, { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setOverviewData(await resp.json())
+    } catch (err) { console.error(err) }
+    finally { setOverviewLoading(false) }
   }
 
   const fetchMemory = async (leadId) => {
@@ -468,151 +528,270 @@ export default function Admin() {
           </div>
         )}
 
-        {/* AI MEMORY & VECTOR BENCHMARK */}
+        {/* AI MEMORY — 3 Sub-Tabs: Overview | Editor | Benchmark */}
         {activeTab === 'memory' && (
           <div style={{ display: 'flex', height: '100%', gap: '24px' }}>
-            {/* Lead List */}
-            <div style={{ width: '280px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
-                Aktive Chat-Sessions ({leads.length})
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                {leads.map(lead => (
-                  <div
-                    key={lead.id}
-                    onClick={() => fetchMemory(lead.id)}
-                    style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
-                  >
-                    <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Main Content */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {selectedLead ? (
-                <>
-                  {/* Sub-Tabs */}
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
-                    {[{k:'dossier',l:'Dossier'},{k:'editor',l:'Raw Editor'},{k:'benchmark',l:'Vector Benchmark'}].map(t => (
-                      <button key={t.k} onClick={() => setMemorySubTab(t.k)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: memorySubTab === t.k ? '#fff' : 'transparent', color: memorySubTab === t.k ? '#0f172a' : '#64748b', fontWeight: memorySubTab === t.k ? 700 : 500, fontSize: '0.85rem', cursor: 'pointer', boxShadow: memorySubTab === t.k ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontFamily: 'Montserrat, sans-serif' }}>
-                        {t.l}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* DOSSIER TAB */}
-                  {memorySubTab === 'dossier' && (
-                    <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', alignContent: 'start' }}>
-                      {parseDossierSections(memoryContent).map((sec, idx) => (
-                        <div key={idx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
-                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#037A8B', marginBottom: '12px', borderBottom: '2px solid #f0fdfa', paddingBottom: '8px' }}>{sec.title}</h4>
-                          {sec.items.map((item, i) => (
-                            <div key={i} style={{ fontSize: '0.85rem', color: '#1e293b', marginBottom: '6px', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: item.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
-                          ))}
+            {/* Conditional Sidebar: hidden for Overview, users for Editor, leads for Benchmark */}
+            {memorySubTab !== 'overview' && (
+              <div style={{ width: '280px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                {memorySubTab === 'editor' ? (
+                  <>
+                    <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
+                      Nutzer ({users.length})
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      {users.map(u => (
+                        <div
+                          key={u.firebase_uid}
+                          onClick={() => fetchUserMemory(u.firebase_uid)}
+                          style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedUser === u.firebase_uid ? '#e0f2fe' : 'transparent', borderLeft: selectedUser === u.firebase_uid ? '4px solid #0369a1' : '4px solid transparent' }}
+                        >
+                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{u.name || u.email || u.firebase_uid}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{u.email}</div>
                         </div>
                       ))}
-                      {/* Sidecar Data */}
-                      {leadSidecar && (
-                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '20px' }}>
-                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400e', marginBottom: '12px' }}>Research Intelligence (Sidecar)</h4>
-                          {Object.entries(leadSidecar).map(([k, v]) => (
-                            <div key={k} style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                              <strong style={{ color: '#78350f' }}>{k}:</strong>{' '}
-                              <span style={{ color: '#1e293b' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
-                            </div>
-                          ))}
+                      {users.length === 0 && (
+                        <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
+                          Noch keine registrierten Nutzer.
                         </div>
                       )}
                     </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
+                      Chat-Sessions ({leads.length})
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      {leads.map(lead => (
+                        <div
+                          key={lead.id}
+                          onClick={() => fetchMemory(lead.id)}
+                          style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
+                        >
+                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Main Panel */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+              {/* Sub-Tab Switcher */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
+                {[{k:'overview',l:'Overview'},{k:'editor',l:'User Editor'},{k:'benchmark',l:'Vector Benchmark'}].map(t => (
+                  <button key={t.k} onClick={() => { setMemorySubTab(t.k); if (t.k === 'overview') fetchOverview(overviewDate) }} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: memorySubTab === t.k ? '#fff' : 'transparent', color: memorySubTab === t.k ? '#0f172a' : '#64748b', fontWeight: memorySubTab === t.k ? 700 : 500, fontSize: '0.85rem', cursor: 'pointer', boxShadow: memorySubTab === t.k ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontFamily: 'Montserrat, sans-serif' }}>
+                    {t.l}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── OVERVIEW ── */}
+              {memorySubTab === 'overview' && (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#475569' }}>📅 Datum:</label>
+                    <input
+                      type="date"
+                      value={overviewDate}
+                      onChange={e => { setOverviewDate(e.target.value); fetchOverview(e.target.value) }}
+                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
+                    />
+                    <button onClick={() => fetchOverview(overviewDate)} style={{ background: '#037A8B', color: '#fff', padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Laden
+                    </button>
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{overviewData.length} Einträge</span>
+                  </div>
+
+                  {overviewLoading && <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Lade Bestellungen...</div>}
+
+                  {!overviewLoading && overviewData.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#94a3b8' }}>
+                      Keine Einträge für diesen Tag.
+                    </div>
                   )}
 
-                  {/* RAW EDITOR TAB */}
-                  {memorySubTab === 'editor' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '20px' }}>
+                    {overviewData.map(item => {
+                      const wiz = item.wizard_data || {}
+                      const menuItems = item.menu || {}
+                      const sc = item.sidecar || {}
+                      return (
+                        <div key={item.checkout_id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {/* Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              {sc.logo_url && (
+                                <img src={sc.logo_url} alt="Logo" style={{ height: '28px', objectFit: 'contain' }} onError={e => { e.target.style.display = 'none' }} />
+                              )}
+                              <div>
+                                <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>{sc.company_name || wiz.companyName || 'Privatkunde'}</div>
+                                {sc.hq_address && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{sc.hq_address}</div>}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
+                              {item.created_at ? new Date(item.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </div>
+                          </div>
+                          {/* Event Meta */}
+                          <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: '#475569' }}>
+                            {wiz.persons && <span>👥 {wiz.persons} Personen</span>}
+                            {item.total_price && <span>💰 {item.total_price.toFixed(2)} €</span>}
+                            {wiz.budget && <span>Budget: {wiz.budget}</span>}
+                          </div>
+                          {/* Menu */}
+                          <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px', fontSize: '0.8rem', lineHeight: '1.6' }}>
+                            {menuItems.vorspeise && <div>🥗 <strong>Vorspeise:</strong> {menuItems.vorspeise?.name || menuItems.vorspeise}</div>}
+                            {menuItems.hauptspeise1 && <div>🍖 <strong>HP1:</strong> {menuItems.hauptspeise1?.name || menuItems.hauptspeise1}</div>}
+                            {menuItems.hauptspeise2 && <div>🍽️ <strong>HP2:</strong> {menuItems.hauptspeise2?.name || menuItems.hauptspeise2}</div>}
+                            {menuItems.nachspeise && <div>🍮 <strong>Dessert:</strong> {menuItems.nachspeise?.name || menuItems.nachspeise}</div>}
+                          </div>
+                          {/* Sonderwünsche */}
+                          {item.custom_wish && (
+                            <div style={{ fontSize: '0.8rem', color: '#475569', fontStyle: 'italic' }}>✍️ „{item.custom_wish}"</div>
+                          )}
+                          {/* Footer */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>#{item.checkout_id?.slice(0, 8)}</span>
+                            {item.order_id ? (
+                              <select
+                                value={item.status}
+                                onChange={e => updateOrderStatus(item.order_id, e.target.value)}
+                                style={{ background: item.status === 'neu' ? '#dcfce7' : item.status === 'abgeschlossen' ? '#e2e8f0' : item.status === 'storniert' ? '#fee2e2' : '#fef08a', color: item.status === 'neu' ? '#166534' : item.status === 'abgeschlossen' ? '#475569' : item.status === 'storniert' ? '#991b1b' : '#854d0e', padding: '4px 10px', borderRadius: '8px', border: '1px solid transparent', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', outline: 'none' }}
+                              >
+                                <option value="neu">Neu</option>
+                                <option value="in bearbeitung">In Bearbeitung</option>
+                                <option value="angebot versendet">Angebot versendet</option>
+                                <option value="abgeschlossen">Abgeschlossen</option>
+                                <option value="storniert">Storniert</option>
+                              </select>
+                            ) : (
+                              <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>Kein Auftrag</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── EDITOR (User Profile) ── */}
+              {memorySubTab === 'editor' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {selectedUser ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
+                      {(() => {
+                        const u = users.find(x => x.firebase_uid === selectedUser)
+                        return u ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#037A8B', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 800, flexShrink: 0 }}>
+                              {(u.name || u.email || '?')[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: '1rem' }}>{u.name || 'Kein Name'}</div>
+                              <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{u.email}</div>
+                            </div>
+                          </div>
+                        ) : null
+                      })()}
+                      <p style={{ fontSize: '0.83rem', color: '#64748b', marginBottom: '12px' }}>
+                        Persistentes KI-Profil — wird ab sofort bei <strong>jeder</strong> KI-Konversation dieses Nutzers berücksichtigt.
+                      </p>
                       <textarea
-                        value={memoryContent}
-                        onChange={(e) => setMemoryContent(e.target.value)}
-                        style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc' }}
+                        value={userMemoryContent}
+                        onChange={e => setUserMemoryContent(e.target.value)}
+                        placeholder={'## Diätanforderungen\n- Glutenfrei (medizinisch!)\n\n## Präferenzen\n- Mediterrane Küche\n- Budget: Premium'}
+                        style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc', minHeight: '300px' }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button onClick={saveMemory} style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
-                          Speichern
+                        <button onClick={saveUserMemory} style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
+                          Profil speichern
                         </button>
                       </div>
                     </div>
-                  )}
-
-                  {/* VECTOR BENCHMARK TAB */}
-                  {memorySubTab === 'benchmark' && (
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {/* Search Input */}
-                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>Vector Search Benchmark</h3>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <input
-                            type="text"
-                            value={benchmarkQuery}
-                            onChange={e => setBenchmarkQuery(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && runBenchmark()}
-                            placeholder="z.B. 'leichtes sommerliches Gericht' oder 'Tiramisu'"
-                            style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
-                          />
-                          <button onClick={runBenchmark} disabled={benchmarkLoading} style={{ background: '#037A8B', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                            {benchmarkLoading ? 'Suche...' : 'Benchmark starten'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Info Box */}
-                      <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px', marginBottom: '16px', fontSize: '0.82rem', color: '#0c4a6e' }}>
-                        <strong>So funktioniert die Suche:</strong> Deine Query wird via <code>gemini-embedding-001</code> in einen 3072-dimensionalen Vektor umgewandelt. Dieser wird per Cosine-Similarity gegen alle {dishes.length} Gerichte-Vektoren in der pgvector-Datenbank verglichen. Nur Ergebnisse mit Score &ge; 0.25 werden angezeigt. Bei keinen Treffern greift ein Fuzzy-String-Fallback.
-                      </div>
-
-                      {/* Results Table */}
-                      {benchmarkResults && (
-                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ background: '#f8fafc' }}>
-                              <tr>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>#</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Gericht</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Kategorie</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Cosine Score</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem', width: '200px' }}>Match</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {benchmarkResults.results.map((r, i) => (
-                                <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
-                                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#037A8B' }}>{i + 1}</td>
-                                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{r.name}</td>
-                                  <td style={{ padding: '12px 16px', color: '#64748b', textTransform: 'capitalize' }}>{r.kategorie}</td>
-                                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 700 }}>{r.similarity_score}</td>
-                                  <td style={{ padding: '12px 16px' }}>
-                                    <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '20px', overflow: 'hidden' }}>
-                                      <div style={{ height: '100%', borderRadius: '4px', background: r.similarity_score > 0.7 ? '#22c55e' : r.similarity_score > 0.5 ? '#f59e0b' : '#ef4444', width: `${Math.round(r.similarity_score * 100)}%`, transition: 'width 0.5s ease' }} />
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {benchmarkResults.results.length === 0 && (
-                                <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Keine Ergebnisse ueber dem Schwellenwert (0.25)</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                  ) : (
+                    <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                      Wähle einen Nutzer aus der Liste, um sein KI-Profil zu bearbeiten.
                     </div>
                   )}
-                </>
-              ) : (
-                <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-                  Wähle einen Lead aus der Liste, um das AI-Dossier und Vector Benchmarks zu sehen.
                 </div>
               )}
+
+              {/* ── VECTOR BENCHMARK ── */}
+              {memorySubTab === 'benchmark' && (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>Vector Search Benchmark</h3>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        type="text"
+                        value={benchmarkQuery}
+                        onChange={e => setBenchmarkQuery(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && runBenchmark()}
+                        placeholder="z.B. 'leichtes sommerliches Gericht' oder 'Tiramisu'"
+                        style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
+                      />
+                      <button onClick={runBenchmark} disabled={benchmarkLoading} style={{ background: '#037A8B', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {benchmarkLoading ? 'Suche...' : 'Benchmark starten'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px', marginBottom: '16px', fontSize: '0.82rem', color: '#0c4a6e' }}>
+                    <strong>So funktioniert die Suche:</strong> Deine Query wird via <code>gemini-embedding-001</code> in einen 3072-dimensionalen Vektor umgewandelt. Cosine-Similarity gegen alle {dishes.length} Gerichte-Vektoren in pgvector. Nur Score &ge; 0.25 wird angezeigt.
+                  </div>
+
+                  {benchmarkResults && (
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ background: '#f8fafc' }}>
+                          <tr>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>#</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Gericht</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Kategorie</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Cosine Score</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem', width: '200px' }}>Match</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {benchmarkResults.results.map((r, i) => (
+                            <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '12px 16px', fontWeight: 700, color: '#037A8B' }}>{i + 1}</td>
+                              <td style={{ padding: '12px 16px', fontWeight: 600 }}>
+                                <div>{r.name}</div>
+                                {r.feedback_context && (
+                                  <details style={{ marginTop: '4px' }}>
+                                    <summary style={{ fontSize: '0.72rem', color: '#94a3b8', cursor: 'pointer' }}>Rich Description</summary>
+                                    <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '4px', padding: '6px', background: '#f8fafc', borderRadius: '4px', lineHeight: '1.5', maxWidth: '300px' }}>{r.feedback_context}</div>
+                                  </details>
+                                )}
+                              </td>
+                              <td style={{ padding: '12px 16px', color: '#64748b', textTransform: 'capitalize' }}>{r.kategorie}</td>
+                              <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 700 }}>{r.similarity_score}</td>
+                              <td style={{ padding: '12px 16px' }}>
+                                <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '20px', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', borderRadius: '4px', background: r.similarity_score > 0.7 ? '#22c55e' : r.similarity_score > 0.5 ? '#f59e0b' : '#ef4444', width: `${Math.round(r.similarity_score * 100)}%`, transition: 'width 0.5s ease' }} />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {benchmarkResults.results.length === 0 && (
+                            <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Keine Ergebnisse ueber dem Schwellenwert (0.25)</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
         )}

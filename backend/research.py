@@ -22,7 +22,7 @@ class ResearchResult(BaseModel):
     logo_url: str | None = None
 
 from database import SessionLocal
-from db_models import DBUsageStats
+from db_models import DBUsageStats, DBMemory
 from datetime import datetime, timezone
 
 # Lazy-initialized client
@@ -209,3 +209,106 @@ Muster für deine Antwort:
             company_colors=["Grau"],
             slogan=None,
         )
+
+
+def find_hq_address(company_name: str) -> str | None:
+    """
+    Dedicated mini-agent: finds ONLY the official German billing/HQ address.
+    Two-step search: 1) Impressum page, 2) Handelsregister fallback.
+    Uses a separate 'address_search' quota (200/day) to avoid depleting google_search.
+    Timeout: 15s, no retry (keeps prefetch fast).
+    """
+    if not company_name:
+        return None
+
+    can_search = check_and_inc_usage("address_search", limit=200)
+    if not can_search:
+        print("[Address] Daily address_search limit reached")
+        return None
+
+    config = types.GenerateContentConfig(
+        tools=[types.Tool(google_search=types.GoogleSearch())]
+    )
+
+    prompts = [
+        # Step 1: Impressum-focused search
+        f"""Suche jetzt aktiv nach dem deutschen Impressum der Firma "{company_name}".
+
+AUFGABE: Finde die OFFIZIELLE LADUNGSFÄHIGE ANSCHRIFT (Rechnungsanschrift/Geschäftssitz).
+
+Priorität:
+1. Impressum der offiziellen Website (z.B. firma.de/impressum oder firma.de/legal/imprint)
+2. Angaben gemäß § 5 TMG
+3. Registered office / Sitz laut Handelsregister
+
+Antworte NUR mit der Adresse im Format "Straße Hausnr, PLZ Stadt" — NICHTS anderes.
+Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
+
+        # Step 2: Handelsregister fallback
+        f"""Suche jetzt aktiv nach der offiziellen Handelsregister-Adresse von "{company_name}" in Deutschland.
+
+Suche nach: "{company_name}" Handelsregister HRB Sitz Adresse
+
+Antworte NUR mit der Adresse im Format "Straße Hausnr, PLZ Stadt" — NICHTS anderes.
+Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
+    ]
+
+    for step, prompt in enumerate(prompts, 1):
+        try:
+            def _call():
+                return _get_client().models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config=config,
+                )
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                response = executor.submit(_call).result(timeout=15)
+
+            raw = response.text.strip().strip('"').strip("'")
+            print(f"[Address Step {step}] Raw: {raw[:80]}")
+
+            if not raw or raw.lower() in ("null", "none", "-", "unbekannt", "keine adresse gefunden"):
+                continue
+
+            # Basic sanity: must contain digit (house number or PLZ)
+            if any(c.isdigit() for c in raw) and len(raw) > 8:
+                print(f"[Address] Found via step {step}: {raw}")
+                return raw
+
+        except Exception as e:
+            print(f"[Address Step {step}] Error: {e}")
+            break  # Don't retry on error — stay fast
+
+    return None
+
+
+def patch_memory_with_research(lead_id: str, research: "ResearchResult") -> None:
+    """
+    After a successful prefetch, overwrites stale placeholder values in the
+    memory dossier (e.g. 'Unbekannt', 'None') with real research data.
+    """
+    db = SessionLocal()
+    try:
+        mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+        if not mem or not mem.content:
+            return
+
+        content = mem.content
+        colors_str = ", ".join(research.company_colors) if research.company_colors else "Unbekannt"
+        slogan_str = research.slogan or "Kein Slogan"
+
+        content = re.sub(r"\*\*Identity:\*\*.*", f"**Identity:** {research.company_name}", content)
+        content = re.sub(r"\*\*Branding:\*\*.*", f"**Branding:** {colors_str} | {slogan_str}", content)
+        content = re.sub(r"\*\*HQ Location:\*\*.*", f"**HQ Location:** {research.hq_address or 'Unbekannt'}", content)
+        content = re.sub(r"\*\*Logo:\*\*.*", f"**Logo:** {research.logo_url or 'None'}", content)
+        content = re.sub(r"\*\*Fancy-Score:\*\*.*", f"**Fancy-Score:** {research.fancy_score}/100", content)
+
+        mem.content = content
+        db.commit()
+        print(f"[Memory Patch] Updated dossier for lead={lead_id} with research data")
+    except Exception as e:
+        print(f"[Memory Patch Error] {e}")
+        db.rollback()
+    finally:
+        db.close()

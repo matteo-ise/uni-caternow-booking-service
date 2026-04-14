@@ -7,7 +7,7 @@ from typing import List
 from pydantic import BaseModel
 
 from database import get_db, SessionLocal
-from db_models import DBOrder, DBFeedback, DBDish, DBMemory
+from db_models import DBOrder, DBFeedback, DBDish, DBMemory, DBUser, DBUserMemory, DBCheckout
 from embeddings import load_and_embed_dishes, find_similar_dishes
 from memory import get_research_sidecar
 
@@ -28,6 +28,9 @@ class MemoryUpdate(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+class UserMemoryUpdate(BaseModel):
+    content: str
 
 def verify_admin(x_admin_token: str = Header(None)):
     if x_admin_token != ADMIN_SECRET:
@@ -133,6 +136,7 @@ async def vector_benchmark(query: str, authenticated: bool = Depends(verify_admi
                     "preis": d.preis,
                     "similarity_score": round(d.similarity_score, 4),
                     "image_url": d.image_url,
+                    "feedback_context": getattr(d, "feedback_context", "") or "",
                 }
                 for d in results
             ],
@@ -153,6 +157,89 @@ async def get_lead_details(lead_id: str, db: Session = Depends(get_db), authenti
         "sidecar": sidecar,
         "updated_at": mem.updated_at,
     }
+
+@router.get("/admin/users")
+async def get_users(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Listet alle registrierten User (Firebase-Accounts) auf."""
+    users = db.query(DBUser).order_by(DBUser.created_at.desc()).all()
+    return [
+        {"id": u.id, "firebase_uid": u.firebase_uid, "email": u.email, "name": u.name, "created_at": u.created_at}
+        for u in users
+    ]
+
+
+@router.get("/admin/user-memory/{firebase_uid}")
+async def get_user_memory(firebase_uid: str, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Gibt das persistente KI-Profil eines Users zurück."""
+    mem = db.query(DBUserMemory).filter(DBUserMemory.firebase_uid == firebase_uid).first()
+    if not mem:
+        return {"content": "", "updated_at": None}
+    return {"content": mem.content or "", "updated_at": mem.updated_at}
+
+
+@router.put("/admin/user-memory/{firebase_uid}")
+async def update_user_memory(firebase_uid: str, data: UserMemoryUpdate, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Setzt das persistente KI-Profil eines Users (erstellt oder überschreibt)."""
+    mem = db.query(DBUserMemory).filter(DBUserMemory.firebase_uid == firebase_uid).first()
+    if mem:
+        mem.content = data.content
+    else:
+        mem = DBUserMemory(firebase_uid=firebase_uid, content=data.content)
+        db.add(mem)
+    db.commit()
+    return {"status": "success"}
+
+
+@router.get("/admin/orders-overview")
+async def get_orders_overview(date: str = None, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Gibt alle Checkouts mit Bestellstatus, Sidecar-Daten und Menü zurück — für den Overview-Tab."""
+    checkouts = db.query(DBCheckout).order_by(DBCheckout.created_at.desc()).all()
+    result = []
+    for c in checkouts:
+        # Optional date filter (YYYY-MM-DD)
+        if date and c.created_at:
+            if c.created_at.strftime("%Y-%m-%d") != date:
+                continue
+
+        # Find the most recent matching order
+        order = (
+            db.query(DBOrder)
+            .filter(DBOrder.lead_id == c.lead_id)
+            .order_by(DBOrder.created_at.desc())
+            .first()
+        )
+
+        try:
+            menu = json.loads(c.menu) if c.menu else {}
+        except Exception:
+            menu = {}
+        try:
+            wizard = json.loads(c.wizard_data) if c.wizard_data else {}
+        except Exception:
+            wizard = {}
+        try:
+            services = json.loads(c.selected_services) if c.selected_services else []
+        except Exception:
+            services = []
+
+        sidecar = get_research_sidecar(c.lead_id)
+
+        result.append({
+            "checkout_id": c.checkout_id,
+            "lead_id": c.lead_id,
+            "created_at": c.created_at,
+            "menu": menu,
+            "wizard_data": wizard,
+            "total_price": order.total_price if order else None,
+            "status": order.status if order else "kein_auftrag",
+            "order_id": order.id if order else None,
+            "sidecar": sidecar,
+            "custom_wish": c.custom_wish,
+            "selected_services": services,
+        })
+
+    return result
+
 
 @router.post("/admin/upload-csv")
 async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):

@@ -396,7 +396,7 @@ export default function Step4Final({ menu, selectedServices, customWish, wizardD
       {/* ── Story at the bottom ──────────────────────────── */}
       <div style={{ marginTop: '40px', background: '#f0fdfa', padding: '32px', borderRadius: '24px', border: '1px solid #037A8B', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         {local.companyLogo && (
-          <img src={local.companyLogo} alt="Firmenlogo" style={{ height: '40px', marginBottom: '16px', objectFit: 'contain' }} />
+          <img src={local.companyLogo} alt="Firmenlogo" style={{ height: '40px', marginBottom: '16px', objectFit: 'contain' }} onError={e => { e.target.style.display = 'none' }} />
         )}
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#037A8B', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           ✨ Deine persönliche Menü-Story

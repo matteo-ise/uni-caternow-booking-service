@@ -105,3 +105,13 @@ class DBMemory(Base):
     content = Column(Text, nullable=False)
     sidecar_data = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class DBUserMemory(Base):
+    """Persistent per-user AI profile — tied to Google/Firebase account."""
+    __tablename__ = "user_memories"
+    id           = Column(Integer, primary_key=True)
+    firebase_uid = Column(String, unique=True, index=True, nullable=False)
+    email        = Column(String, nullable=True)
+    name         = Column(String, nullable=True)
+    content      = Column(Text, nullable=True)   # Markdown: allergies, prefs, VIP notes
+    updated_at   = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

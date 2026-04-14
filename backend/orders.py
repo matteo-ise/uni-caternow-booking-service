@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import threading
@@ -64,11 +65,12 @@ async def get_checkout_story(req: StoryRequest):
         if str(raw_addr).lower() not in ("unbekannt", "null", "none", "", "-"):
             hq_address = str(raw_addr).strip()
         raw_logo = sidecar.get("logo_url") or ""
-        if str(raw_logo).lower() not in ("none", "null", "-", ""):
-            logo_url = str(raw_logo).strip()
+        val_logo = str(raw_logo).strip()
+        if val_logo.lower() not in ("none", "null", "-", "") and val_logo.startswith("https://"):
+            logo_url = val_logo
 
+    # 2. Fallback: parse from memory markdown only when sidecar is incomplete
     if memory and (not hq_address or not logo_url):
-        # Fallback: parse from memory markdown
         addr_match = re.search(r"\*\*HQ[^:*]*:\*\*\s*(.*)", memory, re.IGNORECASE)
         if addr_match and not hq_address:
             val = addr_match.group(1).strip()
@@ -78,16 +80,19 @@ async def get_checkout_story(req: StoryRequest):
         logo_match = re.search(r"\*\*Logo[^:*]*:\*\*\s*(.*)", memory, re.IGNORECASE)
         if logo_match and not logo_url:
             val = logo_match.group(1).strip()
-            if val.lower() not in ("none", "null", "-", ""):
+            if val.lower() not in ("none", "null", "-", "") and val.startswith("https://"):
                 logo_url = val
 
-        # Extract company color for hearts — prefer sidecar, fallback to memory regex
+    # 3. Always generate AI story when memory is available (runs regardless of sidecar state)
+    if memory:
+        # Extract company color — prefer sidecar, fallback to memory regex
         company_color = ""
         if sidecar and sidecar.get("company_colors"):
             company_color = ", ".join(sidecar["company_colors"]).lower()
         if not company_color:
             color_match = re.search(r"\*\*Branding:\*\*\s*(.*?)(?:\s*\||\n)", memory, re.IGNORECASE)
             company_color = color_match.group(1).strip().lower() if color_match else ""
+
         color_to_heart = {
             "rot": "❤️", "red": "❤️",
             "blau": "💙", "blue": "💙",
@@ -113,7 +118,7 @@ Schreibe eine persönliche, kulinarische Menü-Story für die Checkout-Seite.
 
 STRUKTUR & STIL:
 - MAXIMAL 3 SÄTZE. Sei extrem präzise und emotional.
-- NUTZE ABSÄTZE: Füge nach dem ersten oder zweiten Satz einen Doppel-Umbruch (\n\n) ein.
+- NUTZE ABSÄTZE: Füge nach dem ersten oder zweiten Satz einen Doppel-Umbruch (\\n\\n) ein.
 - BRANDING-FOKUS: Nutze die recherchierten Firmenfarben ({company_color if company_color else 'unsere Premium-Farben'}) oder den Slogan rigeros in der Tonalität oder erwähne sie elegant (z.B. "In euren Vereinsfarben...", "Passend zu eurem Look...").
 - KULINARIK: Beschreibe kurz eine Textur oder einen Geschmack eines gewählten Gerichts (NUTZE NUR EIN GERICHT AUS DER LISTE OBEN!).
 
@@ -124,14 +129,21 @@ REGELN:
 - Ausgabe: NUR den Story-Text, kein JSON, keine Formatierung, keine umschließenden Anführungszeichen
 - Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
 """
-        try:
-            response = _get_client().models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-            )
-            story = response.text.strip().strip('"')
-        except:
-            pass
+        MAX_RETRIES = 2
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                response = _get_client().models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                )
+                story = response.text.strip().strip('"')
+                break
+            except Exception as e:
+                if "503" in str(e) and attempt < MAX_RETRIES:
+                    await asyncio.sleep(3 * (attempt + 1))
+                else:
+                    print(f"[Story Error] {e}")
+                    break
 
     return {"story": story, "hq_address": hq_address, "logo_url": logo_url}
 

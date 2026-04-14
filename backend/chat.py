@@ -3,7 +3,7 @@ import json
 import asyncio
 import threading
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -13,9 +13,10 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from database import SessionLocal, get_db
-from db_models import DBDish, DBUser
+from db_models import DBDish, DBUser, DBUserMemory
+from auth import get_optional_user
 from models import Message, WizardData, ChatRequest
-from research import run_company_research
+from research import run_company_research, find_hq_address, patch_memory_with_research
 from memory import get_memory, update_memory_async, save_research_sidecar
 from embeddings import find_similar_dishes
 
@@ -99,18 +100,29 @@ async def prefetch_research(req: PrefetchRequest):
             research = run_company_research(company_name)
             # Only cache a successful result — grey/fallback results mean Gemini failed
             is_real_result = research.company_colors != ["Grau"]
-            if is_real_result:
-                _lead_research_cache[lead_id] = research
-                save_research_sidecar(lead_id, {
-                    "hq_address": research.hq_address,
-                    "logo_url": research.logo_url,
-                    "company_name": research.company_name,
-                    "fancy_score": research.fancy_score,
-                    "company_colors": research.company_colors,
-                })
-                print(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
-            else:
+            if not is_real_result:
                 print(f"[Prefetch] Research returned fallback for {company_name} (likely 503), not caching so next request retries")
+                return
+
+            # If main research didn't find HQ address, run dedicated address mini-agent
+            if not research.hq_address:
+                print(f"[Prefetch] HQ address missing, running address mini-agent for {research.company_name}")
+                addr = find_hq_address(research.company_name or company_name)
+                if addr:
+                    research = research.model_copy(update={"hq_address": addr})
+                    _research_cache[research.company_name or company_name] = research
+
+            _lead_research_cache[lead_id] = research
+            save_research_sidecar(lead_id, {
+                "hq_address": research.hq_address,
+                "logo_url": research.logo_url,
+                "company_name": research.company_name,
+                "fancy_score": research.fancy_score,
+                "company_colors": research.company_colors,
+            })
+            # Patch the memory dossier with real data (replaces "Unbekannt" / "None" placeholders)
+            patch_memory_with_research(lead_id, research)
+            print(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
         except Exception as e:
             print(f"[Prefetch Error] {company_name} (lead={lead_id}): {e}")
         finally:
@@ -123,7 +135,7 @@ async def prefetch_research(req: PrefetchRequest):
 # ── Chat endpoint ──────────────────────────────────────────────────────────────
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_optional_user)):
     conversation = req.conversation
     wizardData = req.wizardData
     leadId = req.leadId or "unknown"
@@ -139,6 +151,18 @@ async def chat(req: ChatRequest):
     # 2. Memory & Research
     memory_context = get_memory(leadId) or ""
     system_prompt = BASE_SYSTEM_PROMPT + "\n\n**LEAD MEMORY:**\n" + memory_context
+
+    # 3. Inject persistent user profile if authenticated
+    if current_user:
+        uid = current_user.get("uid")
+        if uid:
+            db = SessionLocal()
+            try:
+                user_mem = db.query(DBUserMemory).filter(DBUserMemory.firebase_uid == uid).first()
+                if user_mem and user_mem.content:
+                    system_prompt += "\n\n**USER PROFILE (persistent):**\n" + user_mem.content
+            finally:
+                db.close()
 
     hard_facts = wizardData.model_dump() if wizardData else {}
 
