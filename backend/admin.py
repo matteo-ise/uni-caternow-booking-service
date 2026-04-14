@@ -8,7 +8,8 @@ from pydantic import BaseModel
 
 from database import get_db, SessionLocal
 from db_models import DBOrder, DBFeedback, DBDish, DBMemory
-from embeddings import load_and_embed_dishes
+from embeddings import load_and_embed_dishes, find_similar_dishes
+from memory import get_research_sidecar
 
 router = APIRouter()
 
@@ -114,6 +115,44 @@ async def get_all_feedbacks(db: Session = Depends(get_db), authenticated: bool =
 async def get_all_dishes(db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
     dishes = db.query(DBDish).all()
     return [{"id": d.id, "name": d.name, "kategorie": d.kategorie, "preis": d.preis, "feedback_context": d.feedback_context} for d in dishes]
+
+@router.get("/admin/vector-benchmark")
+async def vector_benchmark(query: str, authenticated: bool = Depends(verify_admin)):
+    """Fuehrt eine Vector-Suche durch und gibt detaillierte Ergebnisse zurueck."""
+    try:
+        results = find_similar_dishes(query, top_k=8)
+        return {
+            "query": query,
+            "model": "gemini-embedding-001",
+            "dimensions": 3072,
+            "threshold": 0.25,
+            "results": [
+                {
+                    "name": d.name,
+                    "kategorie": d.kategorie,
+                    "preis": d.preis,
+                    "similarity_score": round(d.similarity_score, 4),
+                    "image_url": d.image_url,
+                }
+                for d in results
+            ],
+        }
+    except Exception as e:
+        return {"query": query, "error": str(e), "results": []}
+
+@router.get("/admin/lead-details/{lead_id}")
+async def get_lead_details(lead_id: str, db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):
+    """Gibt Memory + Sidecar-Daten fuer einen Lead zurueck."""
+    mem = db.query(DBMemory).filter(DBMemory.lead_id == lead_id).first()
+    if not mem:
+        raise HTTPException(status_code=404, detail="Lead nicht gefunden")
+    sidecar = get_research_sidecar(lead_id)
+    return {
+        "lead_id": lead_id,
+        "content": mem.content,
+        "sidecar": sidecar,
+        "updated_at": mem.updated_at,
+    }
 
 @router.post("/admin/upload-csv")
 async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db), authenticated: bool = Depends(verify_admin)):

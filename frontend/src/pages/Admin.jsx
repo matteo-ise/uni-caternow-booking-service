@@ -17,6 +17,11 @@ export default function Admin() {
   
   const [selectedLead, setSelectedLead] = useState(null)
   const [memoryContent, setMemoryContent] = useState('')
+  const [memorySubTab, setMemorySubTab] = useState('dossier')
+  const [leadSidecar, setLeadSidecar] = useState(null)
+  const [benchmarkQuery, setBenchmarkQuery] = useState('')
+  const [benchmarkResults, setBenchmarkResults] = useState(null)
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -104,13 +109,46 @@ export default function Admin() {
   const fetchMemory = async (leadId) => {
     setSelectedLead(leadId)
     setMemoryContent('Lade Memory...')
+    setLeadSidecar(null)
+    setMemorySubTab('dossier')
     try {
-      const resp = await fetch(`${API_URL}/api/admin/memory/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
+      const resp = await fetch(`${API_URL}/api/admin/lead-details/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) {
         const data = await resp.json()
         setMemoryContent(data.content)
+        setLeadSidecar(data.sidecar)
       }
     } catch (err) { setMemoryContent('Fehler beim Laden.') }
+  }
+
+  const runBenchmark = async () => {
+    if (!benchmarkQuery.trim()) return
+    setBenchmarkLoading(true)
+    setBenchmarkResults(null)
+    try {
+      const resp = await fetch(`${API_URL}/api/admin/vector-benchmark?query=${encodeURIComponent(benchmarkQuery)}`, { headers: { 'X-Admin-Token': getAdminToken() } })
+      if (resp.ok) setBenchmarkResults(await resp.json())
+    } catch (err) { console.error(err) }
+    finally { setBenchmarkLoading(false) }
+  }
+
+  const parseDossierSections = (md) => {
+    if (!md) return []
+    const sections = []
+    const lines = md.split('\n')
+    let current = null
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        if (current) sections.push(current)
+        current = { title: line.replace('## ', ''), items: [] }
+      } else if (current && line.trim().startsWith('- ')) {
+        current.items.push(line.trim().replace(/^- /, ''))
+      } else if (current && line.trim()) {
+        current.items.push(line.trim())
+      }
+    }
+    if (current) sections.push(current)
+    return sections
   }
 
   const saveMemory = async () => {
@@ -430,52 +468,149 @@ export default function Admin() {
           </div>
         )}
 
-        {/* MEMORY (OLD ADMIN) */}
+        {/* AI MEMORY & VECTOR BENCHMARK */}
         {activeTab === 'memory' && (
           <div style={{ display: 'flex', height: '100%', gap: '24px' }}>
-            <div style={{ width: '300px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* Lead List */}
+            <div style={{ width: '280px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
-                Aktive Chat-Sessions
+                Aktive Chat-Sessions ({leads.length})
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {leads.map(lead => (
-                  <div 
-                    key={lead.id} 
+                  <div
+                    key={lead.id}
                     onClick={() => fetchMemory(lead.id)}
-                    style={{ 
-                      padding: '16px', 
-                      borderBottom: '1px solid #f1f5f9', 
-                      cursor: 'pointer',
-                      background: selectedLead === lead.id ? '#e0f2fe' : 'transparent',
-                      borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent'
-                    }}
+                    style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
                   >
-                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{lead.id}</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px', display: 'flex', flexDirection: 'column' }}>
+            {/* Main Content */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0' }}>
               {selectedLead ? (
                 <>
-                  <textarea 
-                    value={memoryContent}
-                    onChange={(e) => setMemoryContent(e.target.value)}
-                    style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button 
-                      onClick={saveMemory}
-                      style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      Änderungen speichern
-                    </button>
+                  {/* Sub-Tabs */}
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
+                    {[{k:'dossier',l:'Dossier'},{k:'editor',l:'Raw Editor'},{k:'benchmark',l:'Vector Benchmark'}].map(t => (
+                      <button key={t.k} onClick={() => setMemorySubTab(t.k)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: memorySubTab === t.k ? '#fff' : 'transparent', color: memorySubTab === t.k ? '#0f172a' : '#64748b', fontWeight: memorySubTab === t.k ? 700 : 500, fontSize: '0.85rem', cursor: 'pointer', boxShadow: memorySubTab === t.k ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontFamily: 'Montserrat, sans-serif' }}>
+                        {t.l}
+                      </button>
+                    ))}
                   </div>
+
+                  {/* DOSSIER TAB */}
+                  {memorySubTab === 'dossier' && (
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', alignContent: 'start' }}>
+                      {parseDossierSections(memoryContent).map((sec, idx) => (
+                        <div key={idx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#037A8B', marginBottom: '12px', borderBottom: '2px solid #f0fdfa', paddingBottom: '8px' }}>{sec.title}</h4>
+                          {sec.items.map((item, i) => (
+                            <div key={i} style={{ fontSize: '0.85rem', color: '#1e293b', marginBottom: '6px', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: item.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                          ))}
+                        </div>
+                      ))}
+                      {/* Sidecar Data */}
+                      {leadSidecar && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '20px' }}>
+                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400e', marginBottom: '12px' }}>Research Intelligence (Sidecar)</h4>
+                          {Object.entries(leadSidecar).map(([k, v]) => (
+                            <div key={k} style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                              <strong style={{ color: '#78350f' }}>{k}:</strong>{' '}
+                              <span style={{ color: '#1e293b' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* RAW EDITOR TAB */}
+                  {memorySubTab === 'editor' && (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
+                      <textarea
+                        value={memoryContent}
+                        onChange={(e) => setMemoryContent(e.target.value)}
+                        style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc' }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button onClick={saveMemory} style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
+                          Speichern
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VECTOR BENCHMARK TAB */}
+                  {memorySubTab === 'benchmark' && (
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      {/* Search Input */}
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>Vector Search Benchmark</h3>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <input
+                            type="text"
+                            value={benchmarkQuery}
+                            onChange={e => setBenchmarkQuery(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && runBenchmark()}
+                            placeholder="z.B. 'leichtes sommerliches Gericht' oder 'Tiramisu'"
+                            style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
+                          />
+                          <button onClick={runBenchmark} disabled={benchmarkLoading} style={{ background: '#037A8B', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            {benchmarkLoading ? 'Suche...' : 'Benchmark starten'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Info Box */}
+                      <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px', marginBottom: '16px', fontSize: '0.82rem', color: '#0c4a6e' }}>
+                        <strong>So funktioniert die Suche:</strong> Deine Query wird via <code>gemini-embedding-001</code> in einen 3072-dimensionalen Vektor umgewandelt. Dieser wird per Cosine-Similarity gegen alle {dishes.length} Gerichte-Vektoren in der pgvector-Datenbank verglichen. Nur Ergebnisse mit Score &ge; 0.25 werden angezeigt. Bei keinen Treffern greift ein Fuzzy-String-Fallback.
+                      </div>
+
+                      {/* Results Table */}
+                      {benchmarkResults && (
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead style={{ background: '#f8fafc' }}>
+                              <tr>
+                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>#</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Gericht</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Kategorie</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Cosine Score</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem', width: '200px' }}>Match</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {benchmarkResults.results.map((r, i) => (
+                                <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#037A8B' }}>{i + 1}</td>
+                                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{r.name}</td>
+                                  <td style={{ padding: '12px 16px', color: '#64748b', textTransform: 'capitalize' }}>{r.kategorie}</td>
+                                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 700 }}>{r.similarity_score}</td>
+                                  <td style={{ padding: '12px 16px' }}>
+                                    <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '20px', overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', borderRadius: '4px', background: r.similarity_score > 0.7 ? '#22c55e' : r.similarity_score > 0.5 ? '#f59e0b' : '#ef4444', width: `${Math.round(r.similarity_score * 100)}%`, transition: 'width 0.5s ease' }} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {benchmarkResults.results.length === 0 && (
+                                <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Keine Ergebnisse ueber dem Schwellenwert (0.25)</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
-                <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-                  Wähle einen Lead aus der Liste, um das Live-Gedächtnis zu sehen und zu bearbeiten.
+                <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+                  Wähle einen Lead aus der Liste, um das AI-Dossier und Vector Benchmarks zu sehen.
                 </div>
               )}
             </div>

@@ -42,10 +42,15 @@ export default function ChatModal({ isOpen, onClose }) {
   }, [step, currentUser])
 
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
+    function onKey(e) { if (e.key === 'Escape') handleClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  function handleClose() {
+    if (checkoutId) window.history.pushState({}, '', '/')
+    onClose()
+  }
 
   function addBotMessage(text) {
     setMessages(prev => [...prev, { role: 'model', content: text }])
@@ -110,15 +115,17 @@ export default function ChatModal({ isOpen, onClose }) {
         fullText += chunk
         if (isFirstChunk && chunk.trim()) isFirstChunk = false
 
-        // Multi-Message Split beim Streamen
-        const parts = fullText.split('|||').map(p => p.trim()).filter(Boolean)
-        setMessages(prev => {
+        // Streaming: Display text progressively, hide incomplete JSON blocks
+        const displayText = fullText
+          .replace(/\[MENU_JSON\][\s\S]*$/g, '')
+          .replace(/\[VERIFIED_JSON\][\s\S]*$/g, '')
+        const parts = displayText.split('|||').map(p => p.trim()).filter(Boolean)
+        setMessages(() => {
           const baseMsgs = [...updatedMessages]
-          parts.forEach((p, idx) => {
-             baseMsgs.push({ role: 'model', content: p })
-          })
-          if (isFirstChunk) {
-             baseMsgs.push({ role: 'loading', content: '' })
+          if (parts.length > 0) {
+            parts.forEach(p => baseMsgs.push({ role: 'model', content: p }))
+          } else if (isFirstChunk) {
+            baseMsgs.push({ role: 'loading', content: '' })
           }
           return baseMsgs
         })
@@ -219,6 +226,7 @@ export default function ChatModal({ isOpen, onClose }) {
       if (resp.ok) {
         const data = await resp.json()
         setCheckoutId(data.checkout_id)
+        window.history.pushState({}, '', `/checkout/${data.checkout_id}`)
       }
     } catch (err) {
       console.error('Checkout creation failed:', err)
@@ -255,7 +263,7 @@ export default function ChatModal({ isOpen, onClose }) {
 
   return (
     <>
-      {isOpen && <div className="modal-backdrop" onClick={step < 4 ? onClose : undefined} aria-hidden />}
+      {isOpen && <div className="modal-backdrop" onClick={step < 4 ? handleClose : undefined} aria-hidden />}
       
       <div 
         className={`modal ${step > 1 ? 'modal--fullscreen' : ''}`} 
@@ -267,7 +275,7 @@ export default function ChatModal({ isOpen, onClose }) {
         <div className="modal__header">
           <ProgressTimeline step={step} onNavigate={step < 4 ? handleNavigate : () => {}} />
           {step < 4 && (
-            <button className="modal__close" onClick={onClose} aria-label="Schließen">
+            <button className="modal__close" onClick={handleClose} aria-label="Schließen">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6"  y1="6" x2="18" y2="18"/>
               </svg>
@@ -275,7 +283,7 @@ export default function ChatModal({ isOpen, onClose }) {
           )}
         </div>
         <div className="modal__content">
-          {step === 1 && <Step1Wizard onNext={data => { setWizardData(data); setStep(2) }} onClose={onClose} />}
+          {step === 1 && <Step1Wizard onNext={data => { setWizardData(data); setStep(2) }} onClose={handleClose} />}
           {(step === 2 || step === 3) && (
             <div className="chat-layout">
               <div className="chat-layout__left">
@@ -319,14 +327,14 @@ export default function ChatModal({ isOpen, onClose }) {
               <div style={{ display: 'flex', gap: '16px' }}>
                 <button 
                   className="btn-filled" 
-                  onClick={() => { onClose(); navigate('/profile'); }} 
+                  onClick={() => { handleClose(); navigate('/profile'); }} 
                   style={{ padding: '16px 40px', fontSize: '1.1rem' }}
                 >
                   Zu meinen Bestellungen
                 </button>
                 <button 
                   className="btn-outlined" 
-                  onClick={onClose} 
+                  onClick={handleClose}
                   style={{ padding: '16px 40px', fontSize: '1.1rem' }}
                 >
                   Schließen

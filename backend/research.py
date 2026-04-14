@@ -70,13 +70,23 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     can_search = check_and_inc_usage("google_search", limit=500)
 
     # Nutze das stärkere Modell mit Search Grounding (nur wenn Limit nicht erreicht)
+    tools = []
     if can_search:
-        if hasattr(genai.protos, 'GoogleSearch'):
-            tools = [genai.protos.Tool(google_search=genai.protos.GoogleSearch())]
-        else:
-            tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval())]
-    else:
-        tools = []
+        try:
+            from google.generativeai.types import Tool
+            tools = [Tool(google_search={})]
+            print(f"[Research] Using google_search tool (new SDK)")
+        except Exception:
+            try:
+                tools = [genai.protos.Tool(google_search=genai.protos.GoogleSearch())]
+                print(f"[Research] Using GoogleSearch proto")
+            except Exception:
+                try:
+                    tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval())]
+                    print(f"[Research] Using GoogleSearchRetrieval proto (legacy)")
+                except Exception:
+                    print(f"[Research] No search grounding available, proceeding without")
+                    tools = []
 
     model = genai.GenerativeModel(
         "gemini-2.5-flash",

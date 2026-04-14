@@ -66,9 +66,13 @@ async def get_checkout_story(req: StoryRequest):
             if val.lower() not in ("none", "null", "-", ""):
                 logo_url = val
 
-        # Extract company color for hearts
-        color_match = re.search(r"\*\*Branding:\*\*\s*(.*?)(?:\s*\||\n)", memory, re.IGNORECASE)
-        company_color = color_match.group(1).strip().lower() if color_match else ""
+        # Extract company color for hearts — prefer sidecar, fallback to memory regex
+        company_color = ""
+        if sidecar and sidecar.get("company_colors"):
+            company_color = ", ".join(sidecar["company_colors"]).lower()
+        if not company_color:
+            color_match = re.search(r"\*\*Branding:\*\*\s*(.*?)(?:\s*\||\n)", memory, re.IGNORECASE)
+            company_color = color_match.group(1).strip().lower() if color_match else ""
         color_to_heart = {
             "rot": "❤️", "red": "❤️",
             "blau": "💙", "blue": "💙",
@@ -76,6 +80,9 @@ async def get_checkout_story(req: StoryRequest):
             "lila": "💜", "violett": "💜", "purple": "💜",
             "orange": "🧡",
             "gelb": "💛", "yellow": "💛",
+            "schwarz": "🖤", "black": "🖤",
+            "gold": "💛", "silber": "🩶", "silver": "🩶",
+            "pink": "💗", "rosa": "💗",
         }
         heart = next((h for k, h in color_to_heart.items() if k in company_color), "🤍")
 

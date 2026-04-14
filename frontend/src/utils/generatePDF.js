@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 import QRCode from 'qrcode'
 
 const COURSE_LABELS = {
@@ -141,7 +141,7 @@ export default async function generatePDF({
     ])
   })
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Gang', 'Gericht', 'Menge', 'Einzelpreis', 'Gesamt']],
     body: tableBody,

@@ -1,5 +1,35 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
+
+const REASONING_MESSAGES = [
+  "Analysiere deine Anfrage...",
+  "Durchsuche 177 Gerichte...",
+  "Vergleiche Geschmacksprofile...",
+  "Erstelle Empfehlung...",
+  "Optimiere Menu-Zusammenstellung...",
+  "Berechne AI Match Scores...",
+]
+
+function ReasoningLoader() {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIdx(prev => (prev + 1) % REASONING_MESSAGES.length)
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [])
+  return (
+    <div className="msg msg--reasoning">
+      <div className="msg__avatar msg__avatar--bot">
+        <img src="/favicon.svg" alt="CaterNow" />
+      </div>
+      <div className="reasoning-bubble">
+        <div className="reasoning-bar" />
+        <span className="reasoning-text">{REASONING_MESSAGES[idx]}</span>
+      </div>
+    </div>
+  )
+}
 
 const SERVICE_META = {
   'Geschirr/Besteck':                              { icon: '🍽️', sub: 'Teller & Besteck' },
@@ -88,11 +118,7 @@ export default function ChatPanel({
       <div className="chat-panel__messages">
         {messages.map((msg, i) => {
           if (msg.role === 'loading') {
-            return (
-              <div key={i} className="msg msg--loading">
-                <span></span><span></span><span></span>
-              </div>
-            )
+            return <ReasoningLoader key={i} />
           }
           const isBot = msg.role === 'bot'
           return (
