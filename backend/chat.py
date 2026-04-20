@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import threading
+import queue
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -215,26 +216,50 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
         ]
         chat_config = types.GenerateContentConfig(
             system_instruction=system_prompt + "\n\n" + dishes_context,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
 
         # Retry up to 2 times on 503 (Gemini overload), then fallback model
+        # Uses a queue + thread to avoid blocking the async event loop
         MAX_STREAM_RETRIES = 2
         stream_success = False
         models_to_try = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]
+
+        _SENTINEL = object()
+
+        def _sync_stream(model_name, q):
+            """Run synchronous Gemini stream in a thread, push tokens to queue."""
+            try:
+                session = _get_client().chats.create(
+                    model=model_name,
+                    config=chat_config,
+                    history=history,
+                )
+                for chunk in session.send_message_stream(last_user_msg):
+                    q.put(chunk.text)
+                q.put(_SENTINEL)
+            except Exception as exc:
+                q.put(exc)
+
         for model in models_to_try:
             if stream_success:
                 break
             for attempt in range(MAX_STREAM_RETRIES + 1):
+                q = queue.Queue()
+                t = threading.Thread(target=_sync_stream, args=(model, q), daemon=True)
+                t.start()
                 try:
-                    chat_session = _get_client().chats.create(
-                        model=model,
-                        config=chat_config,
-                        history=history,
-                    )
-                    for chunk in chat_session.send_message_stream(last_user_msg):
-                        token = chunk.text
-                        full_reply += token
-                        yield token
+                    while True:
+                        # Non-blocking poll so we don't freeze the event loop
+                        while q.empty():
+                            await asyncio.sleep(0.02)
+                        item = q.get_nowait()
+                        if item is _SENTINEL:
+                            break
+                        if isinstance(item, Exception):
+                            raise item
+                        full_reply += item
+                        yield item
                     stream_success = True
                     if model != GEMINI_MODEL:
                         print(f"[Chat] Succeeded with fallback model {model}")
@@ -246,14 +271,14 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                         await asyncio.sleep(wait)
                     elif "503" in str(e) and model != GEMINI_FALLBACK_MODEL:
                         print(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
-                        break  # break inner loop to try fallback model
+                        break
                     else:
                         print(f"[Chat Critical] {e}")
                         if "429" in str(e):
                             yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
                         else:
                             yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
-                        stream_success = True  # prevent further model attempts
+                        stream_success = True
                         break
 
         # ── VERIFICATION LAYER (Snap-Back Logic) ──
@@ -303,4 +328,12 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                 args=(leadId, last_user_msg, clean_reply, hard_facts),
             ).start()
 
-    return StreamingResponse(stream_generator(), media_type="text/plain")
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/plain",
+        headers={
+            "X-Accel-Buffering": "no",          # Disable nginx/Render proxy buffering
+            "Cache-Control": "no-cache, no-transform",
+            "Transfer-Encoding": "chunked",
+        },
+    )

@@ -147,6 +147,9 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
                     response = _get_client().models.generate_content(
                         model=mem_model,
                         contents=prompt,
+                        config=types.GenerateContentConfig(
+                            thinking_config=types.ThinkingConfig(thinking_budget=0),
+                        ),
                     )
                     if mem_model != memory_models[0]:
                         print(f"[Memory] Succeeded with fallback model {mem_model}")

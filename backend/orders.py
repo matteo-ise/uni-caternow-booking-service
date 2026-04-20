@@ -140,6 +140,9 @@ REGELN:
                     response = _get_client().models.generate_content(
                         model=story_model,
                         contents=prompt,
+                        config=types.GenerateContentConfig(
+                            thinking_config=types.ThinkingConfig(thinking_budget=0),
+                        ),
                     )
                     story = response.text.strip().strip('"')
                     story_done = True

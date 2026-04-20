@@ -82,14 +82,14 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
 
     can_search = check_and_inc_usage("google_search", limit=500)
 
-    config_kwargs: dict = {}
+    config_kwargs: dict = {"thinking_config": types.ThinkingConfig(thinking_budget=0)}
     if can_search:
         config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
         print(f"[Research] Using google_search tool (google-genai SDK)")
     else:
         print(f"[Research] Daily limit reached, proceeding without search grounding")
 
-    config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
+    config = types.GenerateContentConfig(**config_kwargs)
 
     prompt = f"""Recherchiere jetzt aktiv die Firma "{search_target}" über Google Search.
 
@@ -235,7 +235,8 @@ def find_hq_address(company_name: str) -> str | None:
         return None
 
     config = types.GenerateContentConfig(
-        tools=[types.Tool(google_search=types.GoogleSearch())]
+        tools=[types.Tool(google_search=types.GoogleSearch())],
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
 
     prompts = [
