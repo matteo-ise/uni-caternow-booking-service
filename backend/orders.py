@@ -130,20 +130,32 @@ REGELN:
 - Letzter Satz endet mit genau diesen Emojis: {heart}{heart}{heart}
 """
         MAX_RETRIES = 2
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                response = _get_client().models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                )
-                story = response.text.strip().strip('"')
+        story_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+        story_done = False
+        for story_model in story_models:
+            if story_done:
                 break
-            except Exception as e:
-                if "503" in str(e) and attempt < MAX_RETRIES:
-                    await asyncio.sleep(3 * (attempt + 1))
-                else:
-                    print(f"[Story Error] {e}")
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    response = _get_client().models.generate_content(
+                        model=story_model,
+                        contents=prompt,
+                    )
+                    story = response.text.strip().strip('"')
+                    story_done = True
+                    if story_model != story_models[0]:
+                        print(f"[Story] Succeeded with fallback model {story_model}")
                     break
+                except Exception as e:
+                    if "503" in str(e) and attempt < MAX_RETRIES:
+                        await asyncio.sleep(3 * (attempt + 1))
+                    elif "503" in str(e) and story_model != story_models[-1]:
+                        print(f"[Story] {story_model} exhausted, falling back to {story_models[-1]}")
+                        break
+                    else:
+                        print(f"[Story Error] {e}")
+                        story_done = True
+                        break
 
     return {"story": story, "hq_address": hq_address, "logo_url": logo_url}
 

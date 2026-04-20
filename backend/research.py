@@ -116,52 +116,60 @@ Muster für deine Antwort:
   "hq_address": "Straße Hausnr, PLZ Ort (NUR WENN VERIFIZIERT!) oder null"
 }}"""
 
-    def _call_gemini():
-        return _get_client().models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=config,
-        )
+    MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
-    # ── Step 1: call Gemini with retry on 503 ──────────────────────────────────
+    # ── Step 1: call Gemini with retry on 503, then fallback model ─────────────
     response = None
     MAX_RETRIES = 3
-    for attempt in range(MAX_RETRIES):
-        try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_call_gemini)
-                response = future.result(timeout=25)
-            break  # success
-        except FuturesTimeoutError:
-            print(f"[Research Timeout] {search_target} exceeded 25s")
-            res = ResearchResult(
-                is_business=True,
-                company_name=search_target,
-                core_values=["Innovation"],
-                fancy_score=50,
-                summary="Recherche-Timeout.",
-                company_colors=["Grau"],
-                slogan=None,
+    for model in MODELS:
+        if response is not None:
+            break
+        def _call_gemini():
+            return _get_client().models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
             )
-            _research_cache[search_target] = res
-            return res
-        except Exception as e:
-            if "503" in str(e) and attempt < MAX_RETRIES - 1:
-                wait = 5 * (attempt + 1)
-                print(f"[Research] 503 on attempt {attempt + 1}, retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                print(f"[Research Error Critical] Failed for {search_target}: {e}")
-                # Do NOT cache — let the next request retry
-                return ResearchResult(
+        for attempt in range(MAX_RETRIES):
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_call_gemini)
+                    response = future.result(timeout=25)
+                if model != MODELS[0]:
+                    print(f"[Research] Succeeded with fallback model {model}")
+                break  # success
+            except FuturesTimeoutError:
+                print(f"[Research Timeout] {search_target} exceeded 25s")
+                res = ResearchResult(
                     is_business=True,
                     company_name=search_target,
                     core_values=["Innovation"],
                     fancy_score=50,
-                    summary="Unternehmen im Analyse-Modus.",
+                    summary="Recherche-Timeout.",
                     company_colors=["Grau"],
                     slogan=None,
                 )
+                _research_cache[search_target] = res
+                return res
+            except Exception as e:
+                if "503" in str(e) and attempt < MAX_RETRIES - 1:
+                    wait = 5 * (attempt + 1)
+                    print(f"[Research] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
+                    time.sleep(wait)
+                elif "503" in str(e) and model != MODELS[-1]:
+                    print(f"[Research] {model} exhausted retries, falling back to {MODELS[-1]}")
+                    break  # try next model
+                else:
+                    print(f"[Research Error Critical] Failed for {search_target}: {e}")
+                    return ResearchResult(
+                        is_business=True,
+                        company_name=search_target,
+                        core_values=["Innovation"],
+                        fancy_score=50,
+                        summary="Unternehmen im Analyse-Modus.",
+                        company_colors=["Grau"],
+                        slogan=None,
+                    )
 
     if response is None:
         return ResearchResult(is_business=True, company_name=search_target)
@@ -253,32 +261,40 @@ Antworte NUR mit der Adresse im Format "Straße Hausnr, PLZ Stadt" — NICHTS an
 Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
     ]
 
+    addr_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
     for step, prompt in enumerate(prompts, 1):
-        try:
-            def _call():
-                return _get_client().models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config=config,
-                )
+        for model in addr_models:
+            try:
+                def _call():
+                    return _get_client().models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config,
+                    )
 
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                response = executor.submit(_call).result(timeout=15)
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    response = executor.submit(_call).result(timeout=15)
 
-            raw = response.text.strip().strip('"').strip("'")
-            print(f"[Address Step {step}] Raw: {raw[:80]}")
+                raw = response.text.strip().strip('"').strip("'")
+                print(f"[Address Step {step}] Raw: {raw[:80]}")
 
-            if not raw or raw.lower() in ("null", "none", "-", "unbekannt", "keine adresse gefunden"):
-                continue
+                if not raw or raw.lower() in ("null", "none", "-", "unbekannt", "keine adresse gefunden"):
+                    break  # try next prompt step, not next model
 
-            # Basic sanity: must contain digit (house number or PLZ)
-            if any(c.isdigit() for c in raw) and len(raw) > 8:
-                print(f"[Address] Found via step {step}: {raw}")
-                return raw
+                if any(c.isdigit() for c in raw) and len(raw) > 8:
+                    print(f"[Address] Found via step {step}: {raw}")
+                    return raw
+                break  # got a response but not useful, try next step
 
-        except Exception as e:
-            print(f"[Address Step {step}] Error: {e}")
-            break  # Don't retry on error — stay fast
+            except Exception as e:
+                if "503" in str(e) and model != addr_models[-1]:
+                    print(f"[Address Step {step}] 503 on {model}, trying fallback")
+                    continue
+                print(f"[Address Step {step}] Error: {e}")
+                break
+        else:
+            continue
+        continue
 
     return None
 

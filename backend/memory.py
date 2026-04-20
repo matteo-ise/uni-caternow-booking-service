@@ -140,10 +140,22 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
         """
         
         try:
-            response = _get_client().models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-            )
+            memory_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+            response = None
+            for mem_model in memory_models:
+                try:
+                    response = _get_client().models.generate_content(
+                        model=mem_model,
+                        contents=prompt,
+                    )
+                    if mem_model != memory_models[0]:
+                        print(f"[Memory] Succeeded with fallback model {mem_model}")
+                    break
+                except Exception as e:
+                    if "503" in str(e) and mem_model != memory_models[-1]:
+                        print(f"[Memory] 503 on {mem_model}, trying fallback")
+                        continue
+                    raise
             new_memory = response.text.strip()
             
             # Remove markdown ticks if present

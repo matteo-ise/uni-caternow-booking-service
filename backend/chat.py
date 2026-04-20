@@ -24,6 +24,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 router = APIRouter()
 GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite"
 
 # Lead-level research cache: lead_id → ResearchResult
 _lead_research_cache: dict = {}
@@ -216,34 +217,44 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
             system_instruction=system_prompt + "\n\n" + dishes_context,
         )
 
-        # Retry up to 2 times on 503 (Gemini overload)
+        # Retry up to 2 times on 503 (Gemini overload), then fallback model
         MAX_STREAM_RETRIES = 2
         stream_success = False
-        for attempt in range(MAX_STREAM_RETRIES + 1):
-            try:
-                chat_session = _get_client().chats.create(
-                    model=GEMINI_MODEL,
-                    config=chat_config,
-                    history=history,
-                )
-                for chunk in chat_session.send_message_stream(last_user_msg):
-                    token = chunk.text
-                    full_reply += token
-                    yield token
-                stream_success = True
+        models_to_try = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]
+        for model in models_to_try:
+            if stream_success:
                 break
-            except Exception as e:
-                if "503" in str(e) and attempt < MAX_STREAM_RETRIES:
-                    wait = 4 * (attempt + 1)
-                    print(f"[Chat] 503 on attempt {attempt + 1}, retrying in {wait}s...")
-                    await asyncio.sleep(wait)
-                else:
-                    print(f"[Chat Critical] {e}")
-                    if "429" in str(e):
-                        yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
-                    else:
-                        yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
+            for attempt in range(MAX_STREAM_RETRIES + 1):
+                try:
+                    chat_session = _get_client().chats.create(
+                        model=model,
+                        config=chat_config,
+                        history=history,
+                    )
+                    for chunk in chat_session.send_message_stream(last_user_msg):
+                        token = chunk.text
+                        full_reply += token
+                        yield token
+                    stream_success = True
+                    if model != GEMINI_MODEL:
+                        print(f"[Chat] Succeeded with fallback model {model}")
                     break
+                except Exception as e:
+                    if "503" in str(e) and attempt < MAX_STREAM_RETRIES:
+                        wait = 4 * (attempt + 1)
+                        print(f"[Chat] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
+                        await asyncio.sleep(wait)
+                    elif "503" in str(e) and model != GEMINI_FALLBACK_MODEL:
+                        print(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
+                        break  # break inner loop to try fallback model
+                    else:
+                        print(f"[Chat Critical] {e}")
+                        if "429" in str(e):
+                            yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
+                        else:
+                            yield "Ups, da hat die Verbindung kurz gewackelt. 😉"
+                        stream_success = True  # prevent further model attempts
+                        break
 
         # ── VERIFICATION LAYER (Snap-Back Logic) ──
         match = re.search(r"\[MENU_JSON\](.*?)\[/MENU_JSON\]", full_reply, re.DOTALL)
