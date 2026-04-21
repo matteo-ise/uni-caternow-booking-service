@@ -170,7 +170,7 @@ export default function Admin() {
     setSelectedLead(leadId)
     setMemoryContent('Lade Memory...')
     setLeadSidecar(null)
-    setMemorySubTab('dossier')
+    setMemorySubTab('benchmark')
     try {
       const resp = await fetch(`${API_URL}/api/admin/lead-details/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
       if (resp.ok) {
@@ -647,10 +647,10 @@ export default function Admin() {
                           </div>
                           {/* Menu */}
                           <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px', fontSize: '0.8rem', lineHeight: '1.6' }}>
-                            {menuItems.vorspeise && <div>🥗 <strong>Vorspeise:</strong> {menuItems.vorspeise?.name || menuItems.vorspeise}</div>}
-                            {menuItems.hauptspeise1 && <div>🍖 <strong>HP1:</strong> {menuItems.hauptspeise1?.name || menuItems.hauptspeise1}</div>}
-                            {menuItems.hauptspeise2 && <div>🍽️ <strong>HP2:</strong> {menuItems.hauptspeise2?.name || menuItems.hauptspeise2}</div>}
-                            {menuItems.nachspeise && <div>🍮 <strong>Dessert:</strong> {menuItems.nachspeise?.name || menuItems.nachspeise}</div>}
+                            {menuItems.vorspeise && <div>🥗 <strong>Vorspeise:</strong> {typeof menuItems.vorspeise === 'string' ? menuItems.vorspeise : menuItems.vorspeise?.name}</div>}
+                            {menuItems.hauptspeise1 && <div>🍖 <strong>HP1:</strong> {typeof menuItems.hauptspeise1 === 'string' ? menuItems.hauptspeise1 : menuItems.hauptspeise1?.name}</div>}
+                            {menuItems.hauptspeise2 && <div>🍽️ <strong>HP2:</strong> {typeof menuItems.hauptspeise2 === 'string' ? menuItems.hauptspeise2 : menuItems.hauptspeise2?.name}</div>}
+                            {menuItems.nachspeise && <div>🍮 <strong>Dessert:</strong> {typeof menuItems.nachspeise === 'string' ? menuItems.nachspeise : menuItems.nachspeise?.name}</div>}
                           </div>
                           {/* Sonderwünsche */}
                           {item.custom_wish && (

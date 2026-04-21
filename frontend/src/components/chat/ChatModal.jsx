@@ -136,21 +136,8 @@ export default function ChatModal({ isOpen, onClose }) {
       const verifiedMatch = fullText.match(/\[VERIFIED_JSON\](.*?)\[\/VERIFIED_JSON\]/s)
       const aiMatch = fullText.match(/\[MENU_JSON\](.*?)\[\/MENU_JSON\]/s)
 
-      if (verifiedMatch) {
-        try {
-          const verifiedData = JSON.parse(verifiedMatch[1].trim())
-          const currentConfirmed = confirmedRef.current
-          setMenu(prev => {
-            const updated = { ...prev }
-            for (const [key, value] of Object.entries(verifiedData)) {
-              if (!currentConfirmed[key]) {
-                updated[key] = value
-              }
-            }
-            return updated
-          })
-        } catch (e) { console.error("Verified JSON Error", e) }
-      } else if (aiMatch) {
+      // Always parse MENU_JSON first for menuOptions + initial menu
+      if (aiMatch) {
         try {
           const data = JSON.parse(aiMatch[1].trim())
           const newOptions = {
@@ -168,6 +155,23 @@ export default function ChatModal({ isOpen, onClose }) {
             nachspeise: currentConfirmed.nachspeise ? prev.nachspeise : (data.dessert || null),
           }))
         } catch (e) { console.error("AI JSON Error", e) }
+      }
+
+      // Then overlay verified data on top (replaces AI data with DB-verified dishes)
+      if (verifiedMatch) {
+        try {
+          const verifiedData = JSON.parse(verifiedMatch[1].trim())
+          const currentConfirmed = confirmedRef.current
+          setMenu(prev => {
+            const updated = { ...prev }
+            for (const [key, value] of Object.entries(verifiedData)) {
+              if (!currentConfirmed[key]) {
+                updated[key] = value
+              }
+            }
+            return updated
+          })
+        } catch (e) { console.error("Verified JSON Error", e) }
       }
 
       cleanText = fullText
