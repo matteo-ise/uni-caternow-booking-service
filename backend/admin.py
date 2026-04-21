@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from database import get_db, SessionLocal
 from db_models import DBOrder, DBFeedback, DBDish, DBMemory, DBUser, DBUserMemory, DBCheckout
 from embeddings import load_and_embed_dishes, find_similar_dishes
+from image_resolver import resolve_missing_images, get_image_status
 from memory import get_research_sidecar
 
 router = APIRouter()
@@ -239,6 +240,21 @@ async def get_orders_overview(date: str = None, db: Session = Depends(get_db), a
         })
 
     return result
+
+
+@router.get("/admin/image-status")
+async def image_status(authenticated: bool = Depends(verify_admin)):
+    """Returns overview of dish image resolution status."""
+    return get_image_status()
+
+
+@router.post("/admin/resolve-images")
+async def trigger_resolve_images(authenticated: bool = Depends(verify_admin)):
+    """Manually triggers background image resolution for dishes without images."""
+    import asyncio
+    asyncio.create_task(resolve_missing_images())
+    status = get_image_status()
+    return {"status": "started", "missing": status["missing"], "message": f"Resolving {status['missing']} missing images in background"}
 
 
 @router.post("/admin/upload-csv")

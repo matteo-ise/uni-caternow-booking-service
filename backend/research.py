@@ -99,8 +99,9 @@ KRITISCHE AUFGABE – hq_address:
 1. Suche nach der OFFIZIELLEN LADUNGSFÄHIGEN ANSCHRIFT (Headquarters).
 2. Priorität 1: IMPRESSUM der offiziellen Website (z.B. firma.de/impressum, firma.de/legal).
 3. Priorität 2: Offizielles Handelsregister oder "Contact Us" Seite.
-4. Format: "Straße Hausnummer, PLZ Stadt".
-5. VERIFIZIERUNG: Falls keine ECHTE Adresse gefunden wird, setze hq_address zwingend auf null.
+4. Format: "RECHTSFORM FIRMENNAME, Straße Hausnummer, PLZ Stadt" (z.B. "SAP SE, Dietmar-Hopp-Allee 16, 69190 Walldorf").
+5. Der VOLLE RECHTLICHE FIRMENNAME mit Rechtsform (GmbH, AG, SE, e.K., etc.) MUSS am Anfang stehen.
+6. VERIFIZIERUNG: Falls keine ECHTE Adresse gefunden wird, setze hq_address zwingend auf null.
 
 WICHTIG: Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne jeglichen Markdown-Text, ohne ```json Blöcke und ohne zusätzliche Erklärungen.
 
@@ -113,7 +114,7 @@ Muster für deine Antwort:
   "summary": "1 Satz Beschreibung",
   "company_colors": ["Dominante Branding-Farbe als Wort, z.B. Dunkelblau"],
   "slogan": "Offizieller Slogan oder null",
-  "hq_address": "Straße Hausnr, PLZ Ort (NUR WENN VERIFIZIERT!) oder null"
+  "hq_address": "Rechtsform Firmenname, Straße Hausnr, PLZ Ort (NUR WENN VERIFIZIERT!) oder null"
 }}"""
 
     MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
@@ -193,15 +194,23 @@ Muster für deine Antwort:
             clean_domain = re.sub(r'^https?://', '', domain).split('/')[0]
             logo_url = f"https://logo.clearbit.com/{clean_domain}"
 
+        raw_address = data.get("hq_address")
+        legal_name = data.get("company_name", search_target)
+
+        # Post-processing: ensure legal company name is prepended to address
+        if raw_address and legal_name:
+            if legal_name.lower() not in raw_address.lower():
+                raw_address = f"{legal_name}, {raw_address}"
+
         res = ResearchResult(
             is_business=True,
-            company_name=data.get("company_name", search_target),
+            company_name=legal_name,
             core_values=data.get("core_values", ["Qualität"]),
             fancy_score=data.get("fancy_score", 50),
             summary=data.get("summary", "Ein spannendes Unternehmen."),
             company_colors=data.get("company_colors", ["Blau"]),
             slogan=data.get("slogan"),
-            hq_address=data.get("hq_address"),
+            hq_address=raw_address,
             logo_url=logo_url,
         )
         _research_cache[search_target] = res
@@ -243,14 +252,15 @@ def find_hq_address(company_name: str) -> str | None:
         # Step 1: Impressum-focused search
         f"""Suche jetzt aktiv nach dem deutschen Impressum der Firma "{company_name}".
 
-AUFGABE: Finde die OFFIZIELLE LADUNGSFÄHIGE ANSCHRIFT (Rechnungsanschrift/Geschäftssitz).
+AUFGABE: Finde die OFFIZIELLE LADUNGSFÄHIGE ANSCHRIFT (Rechnungsanschrift/Geschäftssitz) MIT dem vollen rechtlichen Firmennamen.
 
 Priorität:
 1. Impressum der offiziellen Website (z.B. firma.de/impressum oder firma.de/legal/imprint)
 2. Angaben gemäß § 5 TMG
 3. Registered office / Sitz laut Handelsregister
 
-Antworte NUR mit der Adresse im Format "Straße Hausnr, PLZ Stadt" — NICHTS anderes.
+Antworte NUR im Format "Rechtsform Firmenname, Straße Hausnr, PLZ Stadt" (z.B. "SAP SE, Dietmar-Hopp-Allee 16, 69190 Walldorf") — NICHTS anderes.
+Der volle rechtliche Firmenname mit Rechtsform (GmbH, AG, SE, e.K., etc.) MUSS am Anfang stehen.
 Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
 
         # Step 2: Handelsregister fallback
@@ -258,7 +268,8 @@ Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""
 
 Suche nach: "{company_name}" Handelsregister HRB Sitz Adresse
 
-Antworte NUR mit der Adresse im Format "Straße Hausnr, PLZ Stadt" — NICHTS anderes.
+Antworte NUR im Format "Rechtsform Firmenname, Straße Hausnr, PLZ Stadt" (z.B. "SAP SE, Dietmar-Hopp-Allee 16, 69190 Walldorf") — NICHTS anderes.
+Der volle rechtliche Firmenname mit Rechtsform (GmbH, AG, SE, e.K., etc.) MUSS am Anfang stehen.
 Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
     ]
 

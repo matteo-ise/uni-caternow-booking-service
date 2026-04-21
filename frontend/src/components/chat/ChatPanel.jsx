@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../../context/AuthContext'
 
 const REASONING_MESSAGES = [
@@ -134,7 +135,11 @@ export default function ChatPanel({
                   )
                 )}
               </div>
-              <div className="msg__bubble">{msg.text || ''}</div>
+              <div className="msg__bubble">
+                <ReactMarkdown components={{
+                  p: ({children}) => <span>{children}</span>,
+                }}>{msg.text || ''}</ReactMarkdown>
+              </div>
             </div>
           )
         })}

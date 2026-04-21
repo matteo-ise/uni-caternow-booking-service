@@ -13,6 +13,7 @@ from models import Dish
 from database import SessionLocal
 from db_models import DBDish, DBSyncState
 from sync_logic import get_file_hash
+from image_resolver import _local_image_exists
 
 logger = logging.getLogger("CaterNow-Search")
 
@@ -156,7 +157,7 @@ async def load_and_embed_dishes(force_refresh=False):
                         is_fingerfood=to_bool(row.get("eignung_fingerfood"), False),
                         is_buffet=to_bool(row.get("eignung_buffet"), True),
                         popularity=to_float(row.get("beliebheit")),
-                        image_url=f"/images/dishes/{cid}.jpeg", 
+                        image_url=_local_image_exists(cid),  # None if no local file → resolver picks up
                         feedback_context=rich_description, 
                         tenant_id="default"
                     ))

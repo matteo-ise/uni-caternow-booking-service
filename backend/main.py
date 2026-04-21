@@ -17,6 +17,7 @@ import logging
 from database import init_db, get_db, SessionLocal
 from db_models import DBUser, DBSyncState, DBDish
 from embeddings import load_and_embed_dishes, DATA_PATH
+from image_resolver import resolve_missing_images
 from sync_logic import get_file_hash
 from chat import router as chat_router
 from admin import router as admin_router
@@ -49,6 +50,8 @@ async def lifespan(app: FastAPI):
             dish_count = db.query(DBDish).count()
             if force_sync or dish_count == 0:
                 await load_and_embed_dishes(force_refresh=force_sync)
+            # Resolve missing dish images in background (non-blocking)
+            asyncio.create_task(resolve_missing_images())
             logger.info("Application startup complete.")
         except Exception as e:
             logger.error(f"Sync Error: {e}")

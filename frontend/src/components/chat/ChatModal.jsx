@@ -194,6 +194,10 @@ export default function ChatModal({ isOpen, onClose }) {
     } finally { setIsWaiting(false) }
   }, [messages, isWaiting, wizardData, leadId, selectedServices, quickReplies])
   function handleMenuSelect(course, dish) {
+    if (course === 'TRIGGER_HAUPTSPEISE') {
+      handleSend("Die Vorspeise steht! Welche Hauptspeise würdest du dazu empfehlen?")
+      return
+    }
     if (course === 'TRIGGER_UPSELL') {
       handleSend("Hauptspeise 1 gefällt mir sehr gut! Was würdest du als zweite Hauptspeise dazu empfehlen, damit für jeden Gast etwas dabei ist?")
       return

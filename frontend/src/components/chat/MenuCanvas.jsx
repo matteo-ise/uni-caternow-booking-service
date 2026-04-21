@@ -47,6 +47,11 @@ export default function MenuCanvas({ menuOptions, menu, onSelect, onConfirm, ste
     const newState = !confirmed[key]
     setConfirmed(prev => ({ ...prev, [key]: newState }))
     
+    // Wenn Vorspeise bestätigt wurde, auto-continue zu Hauptspeise
+    if (key === 'vorspeise' && newState && onSelect) {
+      onSelect('TRIGGER_HAUPTSPEISE', true)
+    }
+
     // Wenn Hauptspeise 1 bestätigt wurde, benachrichtige den Chat für Upselling
     if (key === 'hauptspeise1' && newState && onSelect) {
       onSelect('TRIGGER_UPSELL', true)

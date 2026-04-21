@@ -1,59 +1,39 @@
 import React, { useState } from 'react';
 
 /**
- * DishImage Component with 3-level fallback strategy:
- * 1. Local GitHub/Render Image (/images/dishes/{id}.jpeg)
- * 2. Unsplash Image (search by dish name)
- * 3. Clean SVG Mockup
+ * DishImage Component with 2-level fallback:
+ * 1. Primary image (src from DB — local path or Unsplash CDN URL)
+ * 2. Curated category fallback (stable Unsplash CDN URLs)
  */
-const DishImage = ({ src, alt, category, style }) => {
-  const [errorLevel, setErrorLevel] = useState(0); // 0: Local, 1: Unsplash, 2: Mockup
 
-  // Unsplash mapping for fallback
-  const unsplashSearch = encodeURIComponent(`${alt} catering food`);
-  const unsplashUrl = `https://source.unsplash.com/featured/400x300?${unsplashSearch}`;
+const CATEGORY_FALLBACKS = {
+  vorspeise: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+  hauptgericht: 'https://images.pexels.com/photos/1279330/pexels-photo-1279330.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+  dessert: 'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop',
+};
+
+const DEFAULT_FALLBACK = CATEGORY_FALLBACKS.hauptgericht;
+
+const DishImage = ({ src, alt, category, style }) => {
+  const [useFallback, setUseFallback] = useState(false);
+
+  const fallbackUrl = CATEGORY_FALLBACKS[category?.toLowerCase()] || DEFAULT_FALLBACK;
 
   const handleError = () => {
-    setErrorLevel(prev => prev + 1);
+    if (!useFallback) {
+      setUseFallback(true);
+    }
   };
 
-  // Level 0: Primary Local Source
-  if (errorLevel === 0) {
-    return (
-      <img 
-        src={src} 
-        alt={alt} 
-        style={{ ...style, objectFit: 'cover' }} 
-        onError={handleError}
-      />
-    );
-  }
+  const imgSrc = useFallback ? fallbackUrl : src;
 
-  // Level 1: Unsplash Fallback
-  if (errorLevel === 1) {
-    return (
-      <img 
-        src={unsplashUrl} 
-        alt={alt} 
-        style={{ ...style, objectFit: 'cover' }} 
-        onError={handleError}
-      />
-    );
-  }
-
-  // Level 2: Emoji Fallback (Clean & Minimal)
   return (
-    <div style={{ 
-      ...style, 
-      background: '#f8fafc', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      fontSize: '2.5rem',
-      color: '#94a3b8'
-    }}>
-      🍴
-    </div>
+    <img
+      src={imgSrc || fallbackUrl}
+      alt={alt}
+      style={{ ...style, objectFit: 'cover' }}
+      onError={handleError}
+    />
   );
 };
 
