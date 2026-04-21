@@ -61,6 +61,13 @@ def init_db():
         migrations = [
             ("memories", "sidecar_data", "ALTER TABLE memories ADD COLUMN IF NOT EXISTS sidecar_data TEXT"),
             ("memories", "updated_at", "ALTER TABLE memories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"),
+            ("users", "first_login_at", "ALTER TABLE users ADD COLUMN IF NOT EXISTS first_login_at TIMESTAMPTZ"),
+            ("users", "last_login_at", "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ"),
+            ("users", "login_count", "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0"),
+            ("users", "login_history", "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_history TEXT"),
+            ("users", "associated_companies", "ALTER TABLE users ADD COLUMN IF NOT EXISTS associated_companies TEXT"),
+            ("users", "total_orders", "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_orders INTEGER DEFAULT 0"),
+            ("users", "total_spent", "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_spent FLOAT DEFAULT 0.0"),
         ]
         for table, column, sql in migrations:
             try:

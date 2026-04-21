@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { API_URL } from '../config'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import UserEditorSubTab from '../components/admin/UserEditorSubTab'
+import OverviewSubTab from '../components/admin/OverviewSubTab'
+import LeadDetailModal from '../components/admin/LeadDetailModal'
 
 export default function Admin() {
   const [password, setPassword] = useState('')
@@ -32,6 +35,9 @@ export default function Admin() {
   const [overviewData, setOverviewData] = useState([])
   const [overviewDate, setOverviewDate] = useState(new Date().toISOString().split('T')[0])
   const [overviewLoading, setOverviewLoading] = useState(false)
+
+  // Lead detail modal
+  const [selectedLeadDetail, setSelectedLeadDetail] = useState(null)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -532,51 +538,24 @@ export default function Admin() {
         {activeTab === 'memory' && (
           <div style={{ display: 'flex', height: '100%', gap: '24px' }}>
 
-            {/* Conditional Sidebar: hidden for Overview, users for Editor, leads for Benchmark */}
-            {memorySubTab !== 'overview' && (
+            {/* Sidebar: leads list for Benchmark sub-tab only */}
+            {memorySubTab === 'benchmark' && (
               <div style={{ width: '280px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                {memorySubTab === 'editor' ? (
-                  <>
-                    <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
-                      Nutzer ({users.length})
+                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
+                  Chat-Sessions ({leads.length})
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {leads.map(lead => (
+                    <div
+                      key={lead.id}
+                      onClick={() => fetchMemory(lead.id)}
+                      style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
+                    >
+                      <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {users.map(u => (
-                        <div
-                          key={u.firebase_uid}
-                          onClick={() => fetchUserMemory(u.firebase_uid)}
-                          style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedUser === u.firebase_uid ? '#e0f2fe' : 'transparent', borderLeft: selectedUser === u.firebase_uid ? '4px solid #0369a1' : '4px solid transparent' }}
-                        >
-                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{u.name || u.email || u.firebase_uid}</div>
-                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{u.email}</div>
-                        </div>
-                      ))}
-                      {users.length === 0 && (
-                        <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
-                          Noch keine registrierten Nutzer.
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
-                      Chat-Sessions ({leads.length})
-                    </div>
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {leads.map(lead => (
-                        <div
-                          key={lead.id}
-                          onClick={() => fetchMemory(lead.id)}
-                          style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
-                        >
-                          <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
-                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                  ))}
+                </div>
               </div>
             )}
 
@@ -594,134 +573,24 @@ export default function Admin() {
 
               {/* ── OVERVIEW ── */}
               {memorySubTab === 'overview' && (
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                    <label style={{ fontWeight: 700, fontSize: '0.9rem', color: '#475569' }}>📅 Datum:</label>
-                    <input
-                      type="date"
-                      value={overviewDate}
-                      onChange={e => { setOverviewDate(e.target.value); fetchOverview(e.target.value) }}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
-                    />
-                    <button onClick={() => fetchOverview(overviewDate)} style={{ background: '#037A8B', color: '#fff', padding: '8px 16px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                      Laden
-                    </button>
-                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{overviewData.length} Einträge</span>
-                  </div>
-
-                  {overviewLoading && <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Lade Bestellungen...</div>}
-
-                  {!overviewLoading && overviewData.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '40px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#94a3b8' }}>
-                      Keine Einträge für diesen Tag.
-                    </div>
-                  )}
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '20px' }}>
-                    {overviewData.map(item => {
-                      const wiz = item.wizard_data || {}
-                      const menuItems = item.menu || {}
-                      const sc = item.sidecar || {}
-                      return (
-                        <div key={item.checkout_id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          {/* Header */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                              {sc.logo_url && (
-                                <img src={sc.logo_url} alt="Logo" style={{ height: '28px', objectFit: 'contain' }} onError={e => { e.target.style.display = 'none' }} />
-                              )}
-                              <div>
-                                <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>{sc.company_name || wiz.companyName || 'Privatkunde'}</div>
-                                {sc.hq_address && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{sc.hq_address}</div>}
-                              </div>
-                            </div>
-                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
-                              {item.created_at ? new Date(item.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-                            </div>
-                          </div>
-                          {/* Event Meta */}
-                          <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: '#475569' }}>
-                            {wiz.persons && <span>👥 {wiz.persons} Personen</span>}
-                            {item.total_price && <span>💰 {item.total_price.toFixed(2)} €</span>}
-                            {wiz.budget && <span>Budget: {wiz.budget}</span>}
-                          </div>
-                          {/* Menu */}
-                          <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px', fontSize: '0.8rem', lineHeight: '1.6' }}>
-                            {menuItems.vorspeise && <div>🥗 <strong>Vorspeise:</strong> {typeof menuItems.vorspeise === 'string' ? menuItems.vorspeise : menuItems.vorspeise?.name}</div>}
-                            {menuItems.hauptspeise1 && <div>🍖 <strong>HP1:</strong> {typeof menuItems.hauptspeise1 === 'string' ? menuItems.hauptspeise1 : menuItems.hauptspeise1?.name}</div>}
-                            {menuItems.hauptspeise2 && <div>🍽️ <strong>HP2:</strong> {typeof menuItems.hauptspeise2 === 'string' ? menuItems.hauptspeise2 : menuItems.hauptspeise2?.name}</div>}
-                            {menuItems.nachspeise && <div>🍮 <strong>Dessert:</strong> {typeof menuItems.nachspeise === 'string' ? menuItems.nachspeise : menuItems.nachspeise?.name}</div>}
-                          </div>
-                          {/* Sonderwünsche */}
-                          {item.custom_wish && (
-                            <div style={{ fontSize: '0.8rem', color: '#475569', fontStyle: 'italic' }}>✍️ „{item.custom_wish}"</div>
-                          )}
-                          {/* Footer */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>#{item.checkout_id?.slice(0, 8)}</span>
-                            {item.order_id ? (
-                              <select
-                                value={item.status}
-                                onChange={e => updateOrderStatus(item.order_id, e.target.value)}
-                                style={{ background: item.status === 'neu' ? '#dcfce7' : item.status === 'abgeschlossen' ? '#e2e8f0' : item.status === 'storniert' ? '#fee2e2' : '#fef08a', color: item.status === 'neu' ? '#166534' : item.status === 'abgeschlossen' ? '#475569' : item.status === 'storniert' ? '#991b1b' : '#854d0e', padding: '4px 10px', borderRadius: '8px', border: '1px solid transparent', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', outline: 'none' }}
-                              >
-                                <option value="neu">Neu</option>
-                                <option value="in bearbeitung">In Bearbeitung</option>
-                                <option value="angebot versendet">Angebot versendet</option>
-                                <option value="abgeschlossen">Abgeschlossen</option>
-                                <option value="storniert">Storniert</option>
-                              </select>
-                            ) : (
-                              <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>Kein Auftrag</span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                <OverviewSubTab
+                  overviewData={overviewData}
+                  overviewDate={overviewDate}
+                  overviewLoading={overviewLoading}
+                  onDateChange={setOverviewDate}
+                  onFetch={fetchOverview}
+                  onUpdateOrderStatus={updateOrderStatus}
+                  onLeadClick={(leadId) => setSelectedLeadDetail(leadId)}
+                />
               )}
 
               {/* ── EDITOR (User Profile) ── */}
               {memorySubTab === 'editor' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {selectedUser ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
-                      {(() => {
-                        const u = users.find(x => x.firebase_uid === selectedUser)
-                        return u ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#037A8B', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 800, flexShrink: 0 }}>
-                              {(u.name || u.email || '?')[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 800, fontSize: '1rem' }}>{u.name || 'Kein Name'}</div>
-                              <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{u.email}</div>
-                            </div>
-                          </div>
-                        ) : null
-                      })()}
-                      <p style={{ fontSize: '0.83rem', color: '#64748b', marginBottom: '12px' }}>
-                        Persistentes KI-Profil — wird ab sofort bei <strong>jeder</strong> KI-Konversation dieses Nutzers berücksichtigt.
-                      </p>
-                      <textarea
-                        value={userMemoryContent}
-                        onChange={e => setUserMemoryContent(e.target.value)}
-                        placeholder={'## Diätanforderungen\n- Glutenfrei (medizinisch!)\n\n## Präferenzen\n- Mediterrane Küche\n- Budget: Premium'}
-                        style={{ flex: 1, width: '100%', padding: '16px', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.6', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', resize: 'none', marginBottom: '16px', background: '#f8fafc', minHeight: '300px' }}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button onClick={saveUserMemory} style={{ background: '#037A8B', color: '#fff', padding: '10px 24px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
-                          Profil speichern
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ flex: 1, background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-                      Wähle einen Nutzer aus der Liste, um sein KI-Profil zu bearbeiten.
-                    </div>
-                  )}
-                </div>
+                <UserEditorSubTab
+                  users={users}
+                  getAdminToken={getAdminToken}
+                  onUsersRefresh={fetchUsers}
+                />
               )}
 
               {/* ── VECTOR BENCHMARK ── */}
@@ -797,6 +666,15 @@ export default function Admin() {
         )}
 
       </div>
+
+      {/* Lead Detail Slide-in Panel */}
+      {selectedLeadDetail && (
+        <LeadDetailModal
+          leadId={selectedLeadDetail}
+          getAdminToken={getAdminToken}
+          onClose={() => setSelectedLeadDetail(null)}
+        />
+      )}
     </div>
   )
 }

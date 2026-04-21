@@ -59,13 +59,14 @@ STRIKTE REGELN:
 
 MISSION:
 1. Schlage Gerichte vor (sie erscheinen rechts).
-2. Beende IMMER mit diesem JSON Block:
+2. Im JSON-Block: Ersetze JEDEN name-Wert mit dem EXAKTEN Gerichtnamen aus der VERFÜGBARE GERICHTE Liste. Kopiere NIEMALS den Platzhalter.
+3. Beende IMMER mit diesem JSON Block:
 [MENU_JSON]
 {
-  "vorspeise": {"name": "EXAKTER_NAME"},
-  "hauptgericht1": {"name": "EXAKTER_NAME"},
-  "hauptgericht2": {"name": "EXAKTER_NAME"},
-  "dessert": {"name": "EXAKTER_NAME"}
+  "vorspeise": {"name": "Name des vorgeschlagenen Gerichts aus der Liste oben"},
+  "hauptgericht1": {"name": "Name des vorgeschlagenen Gerichts aus der Liste oben"},
+  "hauptgericht2": {"name": "Name des vorgeschlagenen Gerichts aus der Liste oben"},
+  "dessert": {"name": "Name des vorgeschlagenen Gerichts aus der Liste oben"}
 }
 [/MENU_JSON]
 """

@@ -140,6 +140,11 @@ export default function ChatModal({ isOpen, onClose }) {
       if (aiMatch) {
         try {
           const data = JSON.parse(aiMatch[1].trim())
+          const isPlaceholder = (dish) => {
+            if (!dish || !dish.name) return true
+            const n = dish.name.toLowerCase()
+            return n.includes('exakter_name') || n.includes('platzhalter') || n.includes('name des')
+          }
           const newOptions = {
             vorspeise: data.vorspeise?.alternativen || (data.vorspeise ? [data.vorspeise] : []),
             hauptspeise1: data.hauptgericht1?.alternativen || (data.hauptgericht1 ? [data.hauptgericht1] : []),
@@ -149,10 +154,10 @@ export default function ChatModal({ isOpen, onClose }) {
           setMenuOptions(newOptions)
           const currentConfirmed = confirmedRef.current
           setMenu(prev => ({
-            vorspeise: currentConfirmed.vorspeise ? prev.vorspeise : (data.vorspeise || null),
-            hauptspeise1: currentConfirmed.hauptspeise1 ? prev.hauptspeise1 : (data.hauptgericht1 || null),
-            hauptspeise2: currentConfirmed.hauptspeise2 ? prev.hauptspeise2 : (data.hauptgericht2 || null),
-            nachspeise: currentConfirmed.nachspeise ? prev.nachspeise : (data.dessert || null),
+            vorspeise: currentConfirmed.vorspeise ? prev.vorspeise : (isPlaceholder(data.vorspeise) ? prev.vorspeise : data.vorspeise),
+            hauptspeise1: currentConfirmed.hauptspeise1 ? prev.hauptspeise1 : (isPlaceholder(data.hauptgericht1) ? prev.hauptspeise1 : data.hauptgericht1),
+            hauptspeise2: currentConfirmed.hauptspeise2 ? prev.hauptspeise2 : (isPlaceholder(data.hauptgericht2) ? prev.hauptspeise2 : data.hauptgericht2),
+            nachspeise: currentConfirmed.nachspeise ? prev.nachspeise : (isPlaceholder(data.dessert) ? prev.nachspeise : data.dessert),
           }))
         } catch (e) { console.error("AI JSON Error", e) }
       }

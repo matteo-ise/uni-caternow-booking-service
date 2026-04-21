@@ -97,7 +97,7 @@ DEINE MISSION: Extrahiere präzise Geschäftsdaten für ein personalisiertes Cat
 
 KRITISCHE AUFGABE – hq_address:
 1. Suche nach der OFFIZIELLEN LADUNGSFÄHIGEN ANSCHRIFT (Headquarters).
-2. Priorität 1: IMPRESSUM der offiziellen Website (z.B. firma.de/impressum, firma.de/legal).
+2. Priorität 1: IMPRESSUM der offiziellen Website (z.B. firma.de/impressum, firma.de/legal, Footer, etc.).
 3. Priorität 2: Offizielles Handelsregister oder "Contact Us" Seite.
 4. Format: "RECHTSFORM FIRMENNAME, Straße Hausnummer, PLZ Stadt" (z.B. "SAP SE, Dietmar-Hopp-Allee 16, 69190 Walldorf").
 5. Der VOLLE RECHTLICHE FIRMENNAME mit Rechtsform (GmbH, AG, SE, e.K., etc.) MUSS am Anfang stehen.

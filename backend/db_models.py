@@ -48,6 +48,13 @@ class DBUser(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    first_login_at = Column(DateTime(timezone=True), nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    login_count = Column(Integer, default=0)
+    login_history = Column(Text, nullable=True)       # JSON: ["2026-04-21T10:30:00Z", ...]
+    associated_companies = Column(Text, nullable=True) # JSON: ["SAP SE", "BMW Group"]
+    total_orders = Column(Integer, default=0)
+    total_spent = Column(Float, default=0.0)
 
 class DBOrder(Base):
     __tablename__ = "orders"

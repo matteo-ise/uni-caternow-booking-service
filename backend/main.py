@@ -14,8 +14,11 @@ from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 import logging
 
+import json
+from datetime import datetime, timezone
+
 from database import init_db, get_db, SessionLocal
-from db_models import DBUser, DBSyncState, DBDish
+from db_models import DBUser, DBSyncState, DBDish, DBOrder, DBMemory
 from embeddings import load_and_embed_dishes, DATA_PATH
 from image_resolver import resolve_missing_images
 from sync_logic import get_file_hash
@@ -96,22 +99,65 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
             user.firebase_uid = uid # Update UID falls sie sich geändert hat
             db.commit()
 
+    now = datetime.now(timezone.utc)
+
     if not user:
-        user = DBUser(firebase_uid=uid, email=email, name=name)
+        user = DBUser(
+            firebase_uid=uid, email=email, name=name,
+            first_login_at=now, last_login_at=now, login_count=1,
+            login_history=json.dumps([now.isoformat()]),
+        )
         db.add(user)
         try:
             db.commit()
         except:
             db.rollback()
             user = db.query(DBUser).filter(DBUser.email == email).first()
-        
+
         db.refresh(user)
+        _update_user_aggregates(db, user)
         return {"status": "created", "user_id": user.id}
     else:
         if user.name != name:
             user.name = name
-            db.commit()
+        user.last_login_at = now
+        user.login_count = (user.login_count or 0) + 1
+        history = []
+        if user.login_history:
+            try:
+                history = json.loads(user.login_history)
+            except Exception:
+                history = []
+        history.append(now.isoformat())
+        user.login_history = json.dumps(history[-100:])  # keep last 100
+        _update_user_aggregates(db, user)
+        db.commit()
         return {"status": "exists", "user_id": user.id}
+
+
+def _update_user_aggregates(db: Session, user: DBUser):
+    """Recompute total_orders, total_spent, associated_companies from DB."""
+    from sqlalchemy import func as sqlfunc
+    order_stats = db.query(
+        sqlfunc.count(DBOrder.id),
+        sqlfunc.coalesce(sqlfunc.sum(DBOrder.total_price), 0.0)
+    ).filter(DBOrder.user_id == user.id).first()
+    user.total_orders = order_stats[0] if order_stats else 0
+    user.total_spent = float(order_stats[1]) if order_stats else 0.0
+
+    companies = set()
+    if user.name:
+        memories = db.query(DBMemory).all()
+        for mem in memories:
+            if user.name.lower() in (mem.lead_id or "").lower():
+                if mem.sidecar_data:
+                    try:
+                        sc = json.loads(mem.sidecar_data)
+                        if sc.get("company_name"):
+                            companies.add(sc["company_name"])
+                    except Exception:
+                        pass
+    user.associated_companies = json.dumps(list(companies), ensure_ascii=False) if companies else None
 
 @app.get("/api/health")
 async def health(db: Session = Depends(get_db)):
