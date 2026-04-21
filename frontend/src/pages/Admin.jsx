@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import UserEditorSubTab from '../components/admin/UserEditorSubTab'
 import OverviewSubTab from '../components/admin/OverviewSubTab'
 import LeadDetailModal from '../components/admin/LeadDetailModal'
+import OrderDetailModal from '../components/admin/OrderDetailModal'
 
 export default function Admin() {
   const [password, setPassword] = useState('')
@@ -18,18 +19,10 @@ export default function Admin() {
   const [feedbacks, setFeedbacks] = useState([])
   const [dishes, setDishes] = useState([])
   
-  const [selectedLead, setSelectedLead] = useState(null)
-  const [memoryContent, setMemoryContent] = useState('')
   const [memorySubTab, setMemorySubTab] = useState('overview')
-  const [leadSidecar, setLeadSidecar] = useState(null)
-  const [benchmarkQuery, setBenchmarkQuery] = useState('')
-  const [benchmarkResults, setBenchmarkResults] = useState(null)
-  const [benchmarkLoading, setBenchmarkLoading] = useState(false)
 
   // User Editor state
   const [users, setUsers] = useState([])
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [userMemoryContent, setUserMemoryContent] = useState('')
 
   // Overview state
   const [overviewData, setOverviewData] = useState([])
@@ -38,6 +31,9 @@ export default function Admin() {
 
   // Lead detail modal
   const [selectedLeadDetail, setSelectedLeadDetail] = useState(null)
+
+  // Order detail modal
+  const [selectedOrder, setSelectedOrder] = useState(null)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -136,30 +132,6 @@ export default function Admin() {
     } catch (err) { console.error(err) }
   }
 
-  const fetchUserMemory = async (uid) => {
-    setSelectedUser(uid)
-    setUserMemoryContent('')
-    try {
-      const resp = await fetch(`${API_URL}/api/admin/user-memory/${uid}`, { headers: { 'X-Admin-Token': getAdminToken() } })
-      if (resp.ok) {
-        const data = await resp.json()
-        setUserMemoryContent(data.content || '')
-      }
-    } catch (err) { console.error(err) }
-  }
-
-  const saveUserMemory = async () => {
-    try {
-      const resp = await fetch(`${API_URL}/api/admin/user-memory/${selectedUser}`, {
-        method: 'PUT',
-        headers: { 'X-Admin-Token': getAdminToken(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMemoryContent })
-      })
-      if (resp.ok) alert('User-Profil gespeichert! Wird ab sofort in KI-Konversationen berücksichtigt.')
-      else alert('Fehler beim Speichern.')
-    } catch (err) { alert('Netzwerkfehler') }
-  }
-
   const fetchOverview = async (date) => {
     setOverviewLoading(true)
     try {
@@ -170,66 +142,6 @@ export default function Admin() {
       if (resp.ok) setOverviewData(await resp.json())
     } catch (err) { console.error(err) }
     finally { setOverviewLoading(false) }
-  }
-
-  const fetchMemory = async (leadId) => {
-    setSelectedLead(leadId)
-    setMemoryContent('Lade Memory...')
-    setLeadSidecar(null)
-    setMemorySubTab('benchmark')
-    try {
-      const resp = await fetch(`${API_URL}/api/admin/lead-details/${leadId}`, { headers: { 'X-Admin-Token': getAdminToken() } })
-      if (resp.ok) {
-        const data = await resp.json()
-        setMemoryContent(data.content)
-        setLeadSidecar(data.sidecar)
-      }
-    } catch (err) { setMemoryContent('Fehler beim Laden.') }
-  }
-
-  const runBenchmark = async () => {
-    if (!benchmarkQuery.trim()) return
-    setBenchmarkLoading(true)
-    setBenchmarkResults(null)
-    try {
-      const resp = await fetch(`${API_URL}/api/admin/vector-benchmark?query=${encodeURIComponent(benchmarkQuery)}`, { headers: { 'X-Admin-Token': getAdminToken() } })
-      if (resp.ok) setBenchmarkResults(await resp.json())
-    } catch (err) { console.error(err) }
-    finally { setBenchmarkLoading(false) }
-  }
-
-  const parseDossierSections = (md) => {
-    if (!md) return []
-    const sections = []
-    const lines = md.split('\n')
-    let current = null
-    for (const line of lines) {
-      if (line.startsWith('## ')) {
-        if (current) sections.push(current)
-        current = { title: line.replace('## ', ''), items: [] }
-      } else if (current && line.trim().startsWith('- ')) {
-        current.items.push(line.trim().replace(/^- /, ''))
-      } else if (current && line.trim()) {
-        current.items.push(line.trim())
-      }
-    }
-    if (current) sections.push(current)
-    return sections
-  }
-
-  const saveMemory = async () => {
-    try {
-      const resp = await fetch(`${API_URL}/api/admin/memory/${selectedLead}`, {
-        method: 'PUT',
-        headers: { 
-          'X-Admin-Token': getAdminToken(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ content: memoryContent })
-      })
-      if (resp.ok) alert("Memory erfolgreich gespeichert! Die KI berücksichtigt diese Notizen ab sofort.")
-      else alert("Fehler beim Speichern.")
-    } catch (err) { alert("Netzwerkfehler") }
   }
 
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -445,21 +357,28 @@ export default function Admin() {
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Status</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Umsatz</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Datum</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr
+                      key={o.id}
+                      onClick={() => setSelectedOrder(o)}
+                      style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
                       <td style={{ padding: '16px' }}>#{o.id}</td>
                       <td style={{ padding: '16px', fontWeight: 600 }}>{o.lead_id}</td>
-                      <td style={{ padding: '16px' }}>
-                        <select 
+                      <td style={{ padding: '16px' }} onClick={e => e.stopPropagation()}>
+                        <select
                           value={o.status}
                           onChange={(e) => updateOrderStatus(o.id, e.target.value)}
-                          style={{ 
-                            background: o.status === 'neu' ? '#dcfce7' : o.status === 'abgeschlossen' ? '#e2e8f0' : o.status === 'storniert' ? '#fee2e2' : '#fef08a', 
-                            color: o.status === 'neu' ? '#166534' : o.status === 'abgeschlossen' ? '#475569' : o.status === 'storniert' ? '#991b1b' : '#854d0e', 
-                            padding: '6px 12px', borderRadius: '8px', border: '1px solid transparent', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', outline: 'none' 
+                          style={{
+                            background: o.status === 'neu' ? '#dcfce7' : o.status === 'abgeschlossen' ? '#e2e8f0' : o.status === 'storniert' ? '#fee2e2' : '#fef08a',
+                            color: o.status === 'neu' ? '#166534' : o.status === 'abgeschlossen' ? '#475569' : o.status === 'storniert' ? '#991b1b' : '#854d0e',
+                            padding: '6px 12px', borderRadius: '8px', border: '1px solid transparent', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', outline: 'none'
                           }}
                         >
                           <option value="neu">Neu</option>
@@ -469,11 +388,12 @@ export default function Admin() {
                           <option value="storniert">Storniert</option>
                         </select>
                       </td>
-                      <td style={{ padding: '16px', fontWeight: 700 }}>{o.total_price} €</td>
-                      <td style={{ padding: '16px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString()}</td>
+                      <td style={{ padding: '16px', fontWeight: 700 }}>{o.total_price ? `${o.total_price.toFixed(2)} €` : '—'}</td>
+                      <td style={{ padding: '16px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString('de-DE')}</td>
+                      <td style={{ padding: '16px', color: '#037A8B', fontSize: '0.85rem', fontWeight: 600 }}>Details →</td>
                     </tr>
                   ))}
-                  {orders.length === 0 && <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center' }}>Keine Bestellungen vorhanden.</td></tr>}
+                  {orders.length === 0 && <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center' }}>Keine Bestellungen vorhanden.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -534,37 +454,15 @@ export default function Admin() {
           </div>
         )}
 
-        {/* AI MEMORY — 3 Sub-Tabs: Overview | Editor | Benchmark */}
+        {/* AI MEMORY — 2 Sub-Tabs: Overview | User Editor */}
         {activeTab === 'memory' && (
           <div style={{ display: 'flex', height: '100%', gap: '24px' }}>
-
-            {/* Sidebar: leads list for Benchmark sub-tab only */}
-            {memorySubTab === 'benchmark' && (
-              <div style={{ width: '280px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, background: '#f8fafc' }}>
-                  Chat-Sessions ({leads.length})
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {leads.map(lead => (
-                    <div
-                      key={lead.id}
-                      onClick={() => fetchMemory(lead.id)}
-                      style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedLead === lead.id ? '#e0f2fe' : 'transparent', borderLeft: selectedLead === lead.id ? '4px solid #0369a1' : '4px solid transparent' }}
-                    >
-                      <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{lead.id}</div>
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>{lead.size} Zeichen</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Main Panel */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
               {/* Sub-Tab Switcher */}
               <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
-                {[{k:'overview',l:'Overview'},{k:'editor',l:'User Editor'},{k:'benchmark',l:'Vector Benchmark'}].map(t => (
+                {[{k:'overview',l:'Overview'},{k:'editor',l:'User Editor'}].map(t => (
                   <button key={t.k} onClick={() => { setMemorySubTab(t.k); if (t.k === 'overview') fetchOverview(overviewDate) }} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: memorySubTab === t.k ? '#fff' : 'transparent', color: memorySubTab === t.k ? '#0f172a' : '#64748b', fontWeight: memorySubTab === t.k ? 700 : 500, fontSize: '0.85rem', cursor: 'pointer', boxShadow: memorySubTab === t.k ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontFamily: 'Montserrat, sans-serif' }}>
                     {t.l}
                   </button>
@@ -593,74 +491,6 @@ export default function Admin() {
                 />
               )}
 
-              {/* ── VECTOR BENCHMARK ── */}
-              {memorySubTab === 'benchmark' && (
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>Vector Search Benchmark</h3>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <input
-                        type="text"
-                        value={benchmarkQuery}
-                        onChange={e => setBenchmarkQuery(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && runBenchmark()}
-                        placeholder="z.B. 'leichtes sommerliches Gericht' oder 'Tiramisu'"
-                        style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontFamily: 'Montserrat, sans-serif' }}
-                      />
-                      <button onClick={runBenchmark} disabled={benchmarkLoading} style={{ background: '#037A8B', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {benchmarkLoading ? 'Suche...' : 'Benchmark starten'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px', marginBottom: '16px', fontSize: '0.82rem', color: '#0c4a6e' }}>
-                    <strong>So funktioniert die Suche:</strong> Deine Query wird via <code>gemini-embedding-001</code> in einen 3072-dimensionalen Vektor umgewandelt. Cosine-Similarity gegen alle {dishes.length} Gerichte-Vektoren in pgvector. Nur Score &ge; 0.25 wird angezeigt.
-                  </div>
-
-                  {benchmarkResults && (
-                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead style={{ background: '#f8fafc' }}>
-                          <tr>
-                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>#</th>
-                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Gericht</th>
-                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Kategorie</th>
-                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem' }}>Cosine Score</th>
-                            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.82rem', width: '200px' }}>Match</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {benchmarkResults.results.map((r, i) => (
-                            <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '12px 16px', fontWeight: 700, color: '#037A8B' }}>{i + 1}</td>
-                              <td style={{ padding: '12px 16px', fontWeight: 600 }}>
-                                <div>{r.name}</div>
-                                {r.feedback_context && (
-                                  <details style={{ marginTop: '4px' }}>
-                                    <summary style={{ fontSize: '0.72rem', color: '#94a3b8', cursor: 'pointer' }}>Rich Description</summary>
-                                    <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '4px', padding: '6px', background: '#f8fafc', borderRadius: '4px', lineHeight: '1.5', maxWidth: '300px' }}>{r.feedback_context}</div>
-                                  </details>
-                                )}
-                              </td>
-                              <td style={{ padding: '12px 16px', color: '#64748b', textTransform: 'capitalize' }}>{r.kategorie}</td>
-                              <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 700 }}>{r.similarity_score}</td>
-                              <td style={{ padding: '12px 16px' }}>
-                                <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '20px', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', borderRadius: '4px', background: r.similarity_score > 0.7 ? '#22c55e' : r.similarity_score > 0.5 ? '#f59e0b' : '#ef4444', width: `${Math.round(r.similarity_score * 100)}%`, transition: 'width 0.5s ease' }} />
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {benchmarkResults.results.length === 0 && (
-                            <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Keine Ergebnisse ueber dem Schwellenwert (0.25)</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
-
             </div>
           </div>
         )}
@@ -673,6 +503,15 @@ export default function Admin() {
           leadId={selectedLeadDetail}
           getAdminToken={getAdminToken}
           onClose={() => setSelectedLeadDetail(null)}
+        />
+      )}
+
+      {/* Order Detail Slide-in Panel */}
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onStatusChange={(orderId, newStatus) => { updateOrderStatus(orderId, newStatus); setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null) }}
         />
       )}
     </div>
