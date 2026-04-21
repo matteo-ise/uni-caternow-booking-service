@@ -1,3 +1,7 @@
+"""
+Shareable checkout links — each checkout gets a short UUID so customers
+can bookmark or share their menu selection before confirming an order.
+"""
 import json
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,6 +25,8 @@ class CheckoutCreate(BaseModel):
 
 @router.post("/checkouts")
 async def create_checkout(data: CheckoutCreate, db: Session = Depends(get_db)):
+    # 8-char prefix of UUIDv4 — collision probability is ~1 in 4 billion,
+    # plenty safe for our order volume
     checkout_id = str(uuid.uuid4())[:8]
     checkout = DBCheckout(
         checkout_id=checkout_id,

@@ -1,3 +1,5 @@
+// App shell + routing. Home component includes health-check polling because
+// the backend runs on Render free tier which cold-starts in ~30s.
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import Navbar      from './components/Navbar'

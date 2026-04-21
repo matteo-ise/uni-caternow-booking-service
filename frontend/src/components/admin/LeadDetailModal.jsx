@@ -1,3 +1,4 @@
+// Modal showing full lead details — chat history, menu selections, research data.
 import { useState, useEffect } from 'react'
 import { API_URL } from '../../config'
 

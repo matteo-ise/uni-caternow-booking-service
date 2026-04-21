@@ -1,3 +1,4 @@
+// Step 1: collect event basics (date, headcount, budget, customer type) before entering the AI chat.
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 

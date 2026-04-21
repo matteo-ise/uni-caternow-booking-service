@@ -1,6 +1,19 @@
+"""
+Streaming chat endpoint bridging Gemini's sync SDK to FastAPI's async responses.
+
+Uses a thread+queue pattern: a background thread runs the synchronous Gemini
+streaming call and pushes tokens into a queue, while the async generator polls
+it with 20ms sleeps to avoid blocking the event loop. On 503s we retry the same
+model twice, then downgrade to flash-lite as a last resort.
+
+After streaming, a "snap-back" verification layer cross-checks AI-suggested dish
+names against the actual DB — because LLMs will confidently hallucinate dish names
+that don't exist in our catalog.
+"""
 import os
 import json
 import asyncio
+import logging
 import threading
 import queue
 import re
@@ -21,18 +34,23 @@ from research import run_company_research, find_hq_address, patch_memory_with_re
 from memory import get_memory, update_memory_async, save_research_sidecar
 from embeddings import find_similar_dishes
 
+logger = logging.getLogger(__name__)
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 router = APIRouter()
+
+# Flash for speed — thinking disabled because we need sub-second first-token latency
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite"
 
-# Lead-level research cache: lead_id → ResearchResult
+# Module-level caches: these survive across requests within the same process.
+# Trade-off: no cross-instance sync (fine for single-dyno Render), but avoids
+# the complexity and latency of Redis for what's essentially ephemeral lead data.
 _lead_research_cache: dict = {}
-# Tracks leads where a prefetch background thread is already running
 _lead_prefetch_in_progress: set = set()
 
-# Lazy-initialized client
+# Lazy-init: avoids SDK setup during import, shaves ~200ms off cold starts on Render
 _client: genai.Client | None = None
 
 def _get_client() -> genai.Client:
@@ -43,6 +61,8 @@ def _get_client() -> genai.Client:
         )
     return _client
 
+# German system prompt is intentional — CaterNow targets the DACH market (DE/AT/CH),
+# and keeping the prompt in German produces noticeably better German output from Gemini.
 BASE_SYSTEM_PROMPT = """Du bist Catersmart Chat, der charmanteste Menü-Verkäufer der Welt.
 
 STRIKTE REGELN:
@@ -72,7 +92,7 @@ MISSION:
 """
 
 def _get_official_dish(suggested_name: str, db: Session) -> Optional[DBDish]:
-    """Sucht ein offizielles Gericht in der DB via Case-Insensitive Match."""
+    """Look up official dish by case-insensitive exact match against the DB."""
     return db.query(DBDish).filter(DBDish.name.ilike(suggested_name.strip())).first()
 
 
@@ -101,17 +121,17 @@ async def prefetch_research(req: PrefetchRequest):
 
     def _background_research():
         try:
-            print(f"[Prefetch] Starting background research for {company_name} (lead={lead_id})")
+            logger.info(f"[Prefetch] Starting background research for {company_name} (lead={lead_id})")
             research = run_company_research(company_name)
-            # Only cache a successful result — grey/fallback results mean Gemini failed
+            # Grey colors = Gemini returned a fallback/error result, don't cache it
             is_real_result = research.company_colors != ["Grau"]
             if not is_real_result:
-                print(f"[Prefetch] Research returned fallback for {company_name} (likely 503), not caching so next request retries")
+                logger.info(f"[Prefetch] Research returned fallback for {company_name} (likely 503), not caching so next request retries")
                 return
 
             # If main research didn't find HQ address, run dedicated address mini-agent
             if not research.hq_address:
-                print(f"[Prefetch] HQ address missing, running address mini-agent for {research.company_name}")
+                logger.info(f"[Prefetch] HQ address missing, running address mini-agent for {research.company_name}")
                 addr = find_hq_address(research.company_name or company_name)
                 if addr:
                     research = research.model_copy(update={"hq_address": addr})
@@ -127,9 +147,9 @@ async def prefetch_research(req: PrefetchRequest):
             })
             # Patch the memory dossier with real data (replaces "Unbekannt" / "None" placeholders)
             patch_memory_with_research(lead_id, research)
-            print(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
+            logger.info(f"[Prefetch] Completed for {company_name} (lead={lead_id}) — hq={research.hq_address}")
         except Exception as e:
-            print(f"[Prefetch Error] {company_name} (lead={lead_id}): {e}")
+            logger.error(f"[Prefetch Error] {company_name} (lead={lead_id}): {e}")
         finally:
             _lead_prefetch_in_progress.discard(lead_id)
 
@@ -146,18 +166,18 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
     leadId = req.leadId or "unknown"
     context_services = req.context_services or []
 
-    # 1. RAG: similar dishes based on last user message
+    # RAG: pull semantically similar dishes for the latest user message
     last_user_msg = conversation[-1].content
     similar_dishes = find_similar_dishes(last_user_msg, top_k=8)
     dishes_context = "VERFÜGBARE ECHTE GERICHTE (NUR DIESE NUTZEN):\n" + "\n".join(
         [f"- {d.name} ({d.kategorie})" for d in similar_dishes]
     )
 
-    # 2. Memory & Research
+    # Memory & Research
     memory_context = get_memory(leadId) or ""
     system_prompt = BASE_SYSTEM_PROMPT + "\n\n**LEAD MEMORY:**\n" + memory_context
 
-    # 3. Inject persistent user profile if authenticated
+    # Inject persistent user profile if authenticated
     if current_user:
         uid = current_user.get("uid")
         if uid:
@@ -209,7 +229,7 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
             })
         else:
             # Prefetch still running — proceed without research for this message
-            print(f"[Chat] Prefetch in progress for {leadId}, skipping research for this message")
+            logger.info(f"[Chat] Prefetch in progress for {leadId}, skipping research for this message")
 
     async def stream_generator():
         full_reply = ""
@@ -222,8 +242,9 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
 
-        # Retry up to 2 times on 503 (Gemini overload), then fallback model
-        # Uses a queue + thread to avoid blocking the async event loop
+        # Retry cascade: same model 2x on 503, then downgrade to lite.
+        # Thread+queue bridges sync Gemini SDK into our async generator —
+        # 20ms polling keeps latency low without busy-waiting the event loop.
         MAX_STREAM_RETRIES = 2
         stream_success = False
         models_to_try = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]
@@ -253,7 +274,8 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                 t.start()
                 try:
                     while True:
-                        # Non-blocking poll so we don't freeze the event loop
+                        # Poll queue without blocking — 20ms is a good balance between
+                        # responsiveness and not hammering the CPU
                         while q.empty():
                             await asyncio.sleep(0.02)
                         item = q.get_nowait()
@@ -265,18 +287,18 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                         yield item
                     stream_success = True
                     if model != GEMINI_MODEL:
-                        print(f"[Chat] Succeeded with fallback model {model}")
+                        logger.info(f"[Chat] Succeeded with fallback model {model}")
                     break
                 except Exception as e:
                     if "503" in str(e) and attempt < MAX_STREAM_RETRIES:
                         wait = 4 * (attempt + 1)
-                        print(f"[Chat] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
+                        logger.warning(f"[Chat] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
                         await asyncio.sleep(wait)
                     elif "503" in str(e) and model != GEMINI_FALLBACK_MODEL:
-                        print(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
+                        logger.warning(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
                         break
                     else:
-                        print(f"[Chat Critical] {e}")
+                        logger.error(f"[Chat Critical] {e}")
                         if "429" in str(e):
                             yield "Meine Leitung glüht gerade vor Begeisterung! 🔥 (Quota Limit erreicht, bitte kurz warten)"
                         else:
@@ -284,7 +306,10 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                         stream_success = True
                         break
 
-        # ── VERIFICATION LAYER (Snap-Back Logic) ──
+        # ── Snap-back verification ──
+        # The AI might suggest dish names that are close but not exact matches
+        # (e.g. "Pasta Primavera" vs "Pasta alla Primavera"). We do a case-insensitive
+        # DB lookup to snap each suggestion back to an official dish entry.
         match = re.search(r"\[MENU_JSON\](.*?)\[/MENU_JSON\]", full_reply, re.DOTALL)
         if match:
             try:
@@ -292,6 +317,7 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                 db = SessionLocal()
                 verified_menu = {}
 
+                # AI uses German course names, frontend expects different keys
                 mapping = {
                     "vorspeise": "vorspeise",
                     "hauptgericht1": "hauptspeise1",
@@ -304,6 +330,8 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                     if dish_name:
                         official_dish = _get_official_dish(dish_name, db)
                         if official_dish:
+                            # Default 0.95 for dishes not in the top-k RAG results —
+                            # they matched by name but weren't in the embedding search
                             sim_score = 0.95
                             for d in similar_dishes:
                                 if d.name == official_dish.name:
@@ -321,9 +349,10 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                 if verified_menu:
                     yield f"\n[VERIFIED_JSON]\n{json.dumps(verified_menu)}\n[/VERIFIED_JSON]"
             except Exception as e:
-                print(f"[Verification Error] {e}")
+                logger.error(f"[Verification Error] {e}")
 
-        # Update Memory in background
+        # Fire-and-forget: memory update runs in a background thread so we don't
+        # hold the response open while Gemini rewrites the dossier
         clean_reply = re.sub(r"\[MENU_JSON\].*?\[/MENU_JSON\]", "", full_reply, flags=re.DOTALL).strip()
         if clean_reply:
             threading.Thread(

@@ -1,7 +1,10 @@
+// Chat interface: message list, event selection cards, service picker, and input bar.
 import { useRef, useEffect, useState, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../../context/AuthContext'
 
+// Illusion of a multi-step AI pipeline — in reality it's a single Gemini call.
+// Cycling through these while waiting makes the 3-5s response feel intentional.
 const REASONING_MESSAGES = [
   "Analysiere deine Anfrage...",
   "Durchsuche 177 Gerichte...",
@@ -101,6 +104,7 @@ export default function ChatPanel({
     setHasInteracted(true);
   }
 
+  // Pre-built prompts to reduce blank-page syndrome — users click instead of thinking
   const SMART_HOTKEYS = [
     "etwas leichtes sommerliches ☀️",
     "etwas frisches/fruchtiges 🍓",

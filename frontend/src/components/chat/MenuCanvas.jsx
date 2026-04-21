@@ -1,3 +1,6 @@
+// Interactive menu builder — carousel cards for each course with confirm/swap.
+// Uses TRIGGER_ injection to drive conversational flow: confirming appetizer
+// auto-asks the AI for a main course suggestion, confirming main 1 triggers upsell.
 import { useState, useEffect, useCallback } from 'react'
 import DishImage from './DishImage'
 

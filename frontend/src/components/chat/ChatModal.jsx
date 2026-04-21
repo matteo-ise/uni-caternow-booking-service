@@ -1,3 +1,18 @@
+// 5-step booking wizard orchestrator.
+// Steps: 1) event basics → 2) AI chat + menu builder → 3) extras → 4) checkout → 5) confirmation
+//
+// Key design decisions:
+// - Lead ID is userName-timestamp so we get uniqueness without a server round-trip
+// - Streaming: we show partial text progressively but strip incomplete JSON blocks
+//   so the user never sees raw [MENU_JSON]... fragments mid-stream
+// - Two-phase menu pipeline: MENU_JSON (AI's best guess) gets parsed first,
+//   then VERIFIED_JSON overlays DB-verified dishes on top. This lets the AI
+//   respond fast while the backend double-checks dish availability.
+// - TRIGGER_ pseudo-events (TRIGGER_HAUPTSPEISE, TRIGGER_UPSELL) are synthetic
+//   messages injected by MenuCanvas to keep the conversational flow going
+//   without the user having to manually ask for the next course.
+// - Research prefetch: fire-and-forget call on step 1→2 transition so company
+//   intel is warm by the time the AI needs it in the chat.
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ProgressTimeline from './ProgressTimeline'

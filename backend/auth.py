@@ -1,58 +1,65 @@
+"""
+Firebase JWT authentication with an insecure PyJWT fallback for local dev.
+
+In production, every request is verified against Firebase's public keys.
+When running offline (no network, expired service account, etc.), the fallback
+decodes the JWT *without* signature verification so the dev flow isn't blocked.
+"""
 import os
+import logging
 import firebase_admin
 from firebase_admin import auth as firebase_auth
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 
-# Lade .env aus dem Hauptverzeichnis
+logger = logging.getLogger(__name__)
+
+# Load .env from the project root
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 project_id = os.environ.get("VITE_FIREBASE_PROJECT_ID")
 
-# Firebase Initialisierung mit expliziter Project ID
+# Firebase init — project ID alone is enough for token verification
 try:
     if not firebase_admin._apps:
         if project_id:
-            # Versuche mit Projekt ID zu initialisieren (reicht oft für Token-Verifikation)
             firebase_admin.initialize_app(options={'projectId': project_id})
-            print(f"[Auth] Firebase Admin initialisiert für Projekt: {project_id}")
+            logger.info("Firebase Admin initialized for project: %s", project_id)
         else:
             firebase_admin.initialize_app()
-            print("[Auth] Firebase Admin mit Standard-Anmeldedaten initialisiert")
+            logger.info("Firebase Admin initialized with default credentials")
 except Exception as e:
-    print(f"[Auth Warning] Firebase Admin konnte nicht initialisiert werden: {e}")
+    logger.warning("Firebase Admin could not be initialized: %s", e)
 
 security = HTTPBearer()
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verpflichtende Authentifizierung."""
+    """Required authentication — rejects unauthenticated requests."""
     token = credentials.credentials
     try:
-        # In Produktion: Strenge Verifikation
         decoded_token = firebase_auth.verify_id_token(token)
         return decoded_token
     except Exception as e:
-        print(f"[Auth Error] Token-Verifikation fehlgeschlagen: {e}")
-        
-        # DEVELOPMENT FALLBACK: 
-        # Wenn wir lokal arbeiten und nur die Signatur-Prüfung fehlschlägt, 
-        # extrahieren wir die UID trotzdem, um den Flow für den Pitch nicht zu blockieren.
-        # (Nur für Demo-Zwecke!)
+        logger.error("Token verification failed: %s", e)
+
+        # INSECURE FALLBACK — NEVER use in production, exists for offline dev only.
+        # Decodes the JWT without signature verification so local demos aren't
+        # blocked by network/credential issues.
         try:
             from firebase_admin import _auth_utils
-            # Wir "vertrauen" dem Token hier lokal für die Demo, falls verify_id_token blockt
-            import jwt # Falls installiert
+            import jwt
             decoded = jwt.decode(token, options={"verify_signature": False})
-            
-            # WICHTIG: Firebase Tokens nutzen 'sub' als UID. Wir mappen das auf 'uid', 
-            # damit das restliche System konsistent bleibt.
+
+            # Firebase tokens use 'sub' as the UID; normalize to 'uid'
+            # so downstream code doesn't need to care about the difference
             if "sub" in decoded and "uid" not in decoded:
                 decoded["uid"] = decoded["sub"]
-                
-            print(f"[Auth Fallback] Nutze unbestätigtes Token für User: {decoded.get('email')} (UID: {decoded.get('uid')})")
+
+            logger.warning("Using unverified token for user: %s (UID: %s)",
+                           decoded.get("email"), decoded.get("uid"))
             return decoded
-        except:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid authentication credentials: {str(e)}",
@@ -60,10 +67,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             )
 
 def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))):
-    """Optionale Authentifizierung."""
+    """Optional authentication — returns None for anonymous requests."""
     if not credentials:
         return None
     try:
         return get_current_user(credentials)
-    except:
+    except Exception:
         return None

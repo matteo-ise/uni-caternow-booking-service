@@ -1,3 +1,5 @@
+// PDF quote generator — jsPDF + autoTable for the menu breakdown, QR code linking
+// back to the checkout page. Uses CaterNow teal (#037A8B) throughout.
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import QRCode from 'qrcode'

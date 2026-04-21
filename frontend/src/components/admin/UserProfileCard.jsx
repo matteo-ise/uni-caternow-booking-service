@@ -1,3 +1,4 @@
+// Admin card showing user profile details and login history.
 export default function UserProfileCard({ profile }) {
   if (!profile) return null
   const { user } = profile

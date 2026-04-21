@@ -1,12 +1,27 @@
+"""
+B2B company intelligence pipeline using Gemini with Google Search grounding.
+
+Researches a company's branding, values, HQ address, and "fancy score" to
+personalize catering proposals. Quota-managed: 500 google_search calls/day on
+the free tier, with a graceful grey fallback when exhausted (proceeds without
+grounding rather than failing hard).
+
+Address lookup uses a two-step approach specific to German companies:
+1. Impressum page (legally required on German websites)
+2. Handelsregister (commercial register) as fallback
+"""
 import os
 import re
 import json
+import logging
 import time
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -25,7 +40,6 @@ from database import SessionLocal
 from db_models import DBUsageStats, DBMemory
 from datetime import datetime, timezone
 
-# Lazy-initialized client
 _client: genai.Client | None = None
 
 def _get_client() -> genai.Client:
@@ -40,7 +54,7 @@ def _get_client() -> genai.Client:
 _research_cache: dict = {}
 
 def check_and_inc_usage(feature: str, limit: int = 500) -> bool:
-    """Prüft das Tageslimit und erhöht den Zähler. Gibt True zurück wenn unter Limit."""
+    """Check daily usage limit and increment counter. Returns True if under limit."""
     db = SessionLocal()
     try:
         stats = db.query(DBUsageStats).filter(DBUsageStats.feature == feature).first()
@@ -65,13 +79,13 @@ def check_and_inc_usage(feature: str, limit: int = 500) -> bool:
         db.commit()
         return True
     except Exception as e:
-        print(f"[Usage Check Error] {e}")
-        return True  # Im Zweifel erlauben
+        logger.error(f"[Usage Check Error] {e}")
+        return True  # Allow on error — better to over-serve than block a lead
     finally:
         db.close()
 
 def run_company_research(company_name_or_domain: str) -> ResearchResult:
-    """Führt Recherche durch mit Google Search Grounding (Limit: 500/Tag)."""
+    """Run company research with Google Search grounding (limit: 500/day)."""
     if not company_name_or_domain:
         return ResearchResult(is_business=False)
 
@@ -80,14 +94,16 @@ def run_company_research(company_name_or_domain: str) -> ResearchResult:
     if search_target in _research_cache:
         return _research_cache[search_target]
 
+    # 500 google_search calls/day on free tier — after that we still run the
+    # prompt but without grounding, so results are based on training data only
     can_search = check_and_inc_usage("google_search", limit=500)
 
     config_kwargs: dict = {"thinking_config": types.ThinkingConfig(thinking_budget=0)}
     if can_search:
         config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
-        print(f"[Research] Using google_search tool (google-genai SDK)")
+        logger.info(f"[Research] Using google_search tool (google-genai SDK)")
     else:
-        print(f"[Research] Daily limit reached, proceeding without search grounding")
+        logger.info(f"[Research] Daily limit reached, proceeding without search grounding")
 
     config = types.GenerateContentConfig(**config_kwargs)
 
@@ -119,7 +135,7 @@ Muster für deine Antwort:
 
     MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
-    # ── Step 1: call Gemini with retry on 503, then fallback model ─────────────
+    # Call Gemini with retry on 503, then fallback model
     response = None
     MAX_RETRIES = 3
     for model in MODELS:
@@ -137,10 +153,10 @@ Muster für deine Antwort:
                     future = executor.submit(_call_gemini)
                     response = future.result(timeout=25)
                 if model != MODELS[0]:
-                    print(f"[Research] Succeeded with fallback model {model}")
+                    logger.info(f"[Research] Succeeded with fallback model {model}")
                 break  # success
             except FuturesTimeoutError:
-                print(f"[Research Timeout] {search_target} exceeded 25s")
+                logger.warning(f"[Research Timeout] {search_target} exceeded 25s")
                 res = ResearchResult(
                     is_business=True,
                     company_name=search_target,
@@ -155,13 +171,13 @@ Muster für deine Antwort:
             except Exception as e:
                 if "503" in str(e) and attempt < MAX_RETRIES - 1:
                     wait = 5 * (attempt + 1)
-                    print(f"[Research] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
+                    logger.warning(f"[Research] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
                     time.sleep(wait)
                 elif "503" in str(e) and model != MODELS[-1]:
-                    print(f"[Research] {model} exhausted retries, falling back to {MODELS[-1]}")
+                    logger.warning(f"[Research] {model} exhausted retries, falling back to {MODELS[-1]}")
                     break  # try next model
                 else:
-                    print(f"[Research Error Critical] Failed for {search_target}: {e}")
+                    logger.error(f"[Research Error Critical] Failed for {search_target}: {e}")
                     return ResearchResult(
                         is_business=True,
                         company_name=search_target,
@@ -175,10 +191,10 @@ Muster für deine Antwort:
     if response is None:
         return ResearchResult(is_business=True, company_name=search_target)
 
-    # ── Step 2: parse JSON response ────────────────────────────────────────────
+    # Parse JSON response
     try:
         text_resp = response.text.strip()
-        print(f"[Research Debug] Raw response for {search_target}: {text_resp[:120]}...")
+        logger.debug(f"[Research Debug] Raw response for {search_target}: {text_resp[:120]}...")
 
         if "```json" in text_resp:
             text_resp = text_resp.split("```json")[1].split("```")[0]
@@ -186,8 +202,9 @@ Muster für deine Antwort:
             text_resp = text_resp.split("```")[1].split("```")[0]
 
         data = json.loads(text_resp.strip())
-        print(f"[Research Debug] JSON parsed successfully for {search_target}")
+        logger.debug(f"[Research Debug] JSON parsed successfully for {search_target}")
 
+        # Clearbit logo CDN: free, no API key needed, just pass the domain
         domain = data.get("domain", "")
         logo_url = None
         if domain:
@@ -197,7 +214,7 @@ Muster für deine Antwort:
         raw_address = data.get("hq_address")
         legal_name = data.get("company_name", search_target)
 
-        # Post-processing: ensure legal company name is prepended to address
+        # Ensure legal company name is prepended to address
         if raw_address and legal_name:
             if legal_name.lower() not in raw_address.lower():
                 raw_address = f"{legal_name}, {raw_address}"
@@ -216,7 +233,7 @@ Muster für deine Antwort:
         _research_cache[search_target] = res
         return res
     except Exception as e:
-        print(f"[Research Parse Error] {search_target}: {e}")
+        logger.error(f"[Research Parse Error] {search_target}: {e}")
         return ResearchResult(
             is_business=True,
             company_name=search_target,
@@ -240,7 +257,7 @@ def find_hq_address(company_name: str) -> str | None:
 
     can_search = check_and_inc_usage("address_search", limit=200)
     if not can_search:
-        print("[Address] Daily address_search limit reached")
+        logger.info("[Address] Daily address_search limit reached")
         return None
 
     config = types.GenerateContentConfig(
@@ -249,7 +266,7 @@ def find_hq_address(company_name: str) -> str | None:
     )
 
     prompts = [
-        # Step 1: Impressum-focused search
+        # Step 1: Impressum-focused search (most reliable for German companies)
         f"""Suche jetzt aktiv nach dem deutschen Impressum der Firma "{company_name}".
 
 AUFGABE: Finde die OFFIZIELLE LADUNGSFÄHIGE ANSCHRIFT (Rechnungsanschrift/Geschäftssitz) MIT dem vollen rechtlichen Firmennamen.
@@ -263,7 +280,7 @@ Antworte NUR im Format "Rechtsform Firmenname, Straße Hausnr, PLZ Stadt" (z.B. 
 Der volle rechtliche Firmenname mit Rechtsform (GmbH, AG, SE, e.K., etc.) MUSS am Anfang stehen.
 Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""",
 
-        # Step 2: Handelsregister fallback
+        # Step 2: Handelsregister fallback (public commercial register)
         f"""Suche jetzt aktiv nach der offiziellen Handelsregister-Adresse von "{company_name}" in Deutschland.
 
 Suche nach: "{company_name}" Handelsregister HRB Sitz Adresse
@@ -288,21 +305,21 @@ Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""
                     response = executor.submit(_call).result(timeout=15)
 
                 raw = response.text.strip().strip('"').strip("'")
-                print(f"[Address Step {step}] Raw: {raw[:80]}")
+                logger.debug(f"[Address Step {step}] Raw: {raw[:80]}")
 
                 if not raw or raw.lower() in ("null", "none", "-", "unbekannt", "keine adresse gefunden"):
                     break  # try next prompt step, not next model
 
                 if any(c.isdigit() for c in raw) and len(raw) > 8:
-                    print(f"[Address] Found via step {step}: {raw}")
+                    logger.info(f"[Address] Found via step {step}: {raw}")
                     return raw
                 break  # got a response but not useful, try next step
 
             except Exception as e:
                 if "503" in str(e) and model != addr_models[-1]:
-                    print(f"[Address Step {step}] 503 on {model}, trying fallback")
+                    logger.warning(f"[Address Step {step}] 503 on {model}, trying fallback")
                     continue
-                print(f"[Address Step {step}] Error: {e}")
+                logger.error(f"[Address Step {step}] Error: {e}")
                 break
         else:
             continue
@@ -313,8 +330,11 @@ Falls keine verifizierbare Adresse gefunden: antworte nur mit dem Wort "null".""
 
 def patch_memory_with_research(lead_id: str, research: "ResearchResult") -> None:
     """
-    After a successful prefetch, overwrites stale placeholder values in the
-    memory dossier (e.g. 'Unbekannt', 'None') with real research data.
+    Regex-based dossier patching: overwrites stale placeholder values
+    (e.g. 'Unbekannt', 'None') with real research data.
+
+    Fragile but effective — the markdown template structure in memory.py
+    must stay in sync with these regexes.
     """
     db = SessionLocal()
     try:
@@ -334,9 +354,9 @@ def patch_memory_with_research(lead_id: str, research: "ResearchResult") -> None
 
         mem.content = content
         db.commit()
-        print(f"[Memory Patch] Updated dossier for lead={lead_id} with research data")
+        logger.info(f"[Memory Patch] Updated dossier for lead={lead_id} with research data")
     except Exception as e:
-        print(f"[Memory Patch Error] {e}")
+        logger.error(f"[Memory Patch Error] {e}")
         db.rollback()
     finally:
         db.close()

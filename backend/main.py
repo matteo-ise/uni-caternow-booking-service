@@ -1,18 +1,29 @@
+"""
+FastAPI application entry point — handles startup sync and user session management.
+
+On boot, we hash the dish CSV and only re-embed when the file actually changed.
+This saves significant Gemini embedding quota on restarts/redeploys.
+User aggregates (total_orders, total_spent, companies) are denormalized onto the
+user row at login time rather than computed per-request — good enough for an MVP
+and keeps the admin dashboard snappy.
+"""
 import os
 import sys
+import logging
 
-# Environment Check
+logger = logging.getLogger(__name__)
+
+# Fail-fast env checks before heavy imports
 if not os.environ.get("DATABASE_URL") and not os.path.exists(".env"):
-    print("[CRITICAL] DATABASE_URL is missing.")
+    logger.critical("DATABASE_URL is missing.")
 
 if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_API_KEY") and not os.path.exists(".env"):
-    print("[CRITICAL] GEMINI_API_KEY is missing.")
+    logger.critical("GEMINI_API_KEY is missing.")
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
-import logging
 
 import json
 from datetime import datetime, timezone
@@ -28,9 +39,7 @@ from orders import router as orders_router
 from checkouts import router as checkouts_router
 from auth import get_current_user
 
-# Logger setup
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("CaterNow-Main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,14 +98,15 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
     email = decoded_token.get("email")
     name = decoded_token.get("name", "")
     
-    # 1. Suche nach UID
+    # Look up by UID first
     user = db.query(DBUser).filter(DBUser.firebase_uid == uid).first()
-    
-    # 2. Falls nicht gefunden, suche nach Email (verhindert UniqueViolation)
+
+    # Fall back to email lookup — prevents UniqueViolation when Firebase UID drifts
+    # (happens when users re-auth or switch between auth providers)
     if not user and email:
         user = db.query(DBUser).filter(DBUser.email == email).first()
         if user:
-            user.firebase_uid = uid # Update UID falls sie sich geändert hat
+            user.firebase_uid = uid
             db.commit()
 
     now = datetime.now(timezone.utc)
@@ -110,7 +120,7 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
         db.add(user)
         try:
             db.commit()
-        except:
+        except Exception:
             db.rollback()
             user = db.query(DBUser).filter(DBUser.email == email).first()
 
@@ -129,7 +139,8 @@ async def sync_user(decoded_token: dict = Depends(get_current_user), db: Session
             except Exception:
                 history = []
         history.append(now.isoformat())
-        user.login_history = json.dumps(history[-100:])  # keep last 100
+        # Cap at 100 entries to keep the JSON column from growing unbounded
+        user.login_history = json.dumps(history[-100:])
         _update_user_aggregates(db, user)
         db.commit()
         return {"status": "exists", "user_id": user.id}

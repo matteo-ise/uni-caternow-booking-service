@@ -1,3 +1,16 @@
+"""
+SQLAlchemy ORM models — 9 tables covering the full domain:
+
+  dishes        Dish catalog with pgvector embeddings (3072-dim Gemini)
+  users         Firebase-linked user accounts with denormalized aggregates
+  orders        Order records tied to leads and optionally to users
+  feedbacks     Per-dish and general feedback (drives re-embedding loop)
+  sync_state    Tracks CSV hash to skip redundant embedding runs
+  usage_stats   Rate-limit counters for external API features
+  checkouts     Shareable checkout snapshots via short UUID
+  memories      Lead dossiers (AI-generated company/contact profiles)
+  user_memories Persistent per-user AI profiles tied to Firebase accounts
+"""
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func

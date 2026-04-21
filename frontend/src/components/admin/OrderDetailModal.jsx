@@ -1,3 +1,4 @@
+// Modal for viewing a single order's full details and updating its status.
 export default function OrderDetailModal({ order, onClose, onStatusChange }) {
   if (!order) return null
 

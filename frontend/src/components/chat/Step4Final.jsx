@@ -1,3 +1,5 @@
+// Checkout summary: editable quantities, price calculator, AI-generated menu story,
+// and contact form. All pricing runs client-side so the user sees instant updates.
 import { useState, useEffect, useMemo } from 'react'
 import { API_URL } from '../../config'
 import DishImage from './DishImage'
@@ -58,6 +60,8 @@ export default function Step4Final({ menu, selectedServices, customWish, wizardD
   const [email, setEmail] = useState(userEmail || '')
   const [address, setAddress] = useState('')
   const [additionalNotes, setAdditionalNotes] = useState('')
+  // For B2B leads we pre-fill the address from research data; glow animation
+  // draws attention to the auto-filled field so the user notices and can correct it
   const [isAiAddress] = useState(wizardData.customerType === 'business' && !!wizardData.companyName)
   const [addressGlow, setAddressGlow] = useState(false)
 
@@ -65,6 +69,8 @@ export default function Step4Final({ menu, selectedServices, customWish, wizardD
   const participantCount = parseInt(wizardData.persons) || 0
   const hasTwoMains = !!menu.hauptspeise1 && !!menu.hauptspeise2
 
+  // Default split: when two mains exist, assume roughly 50/50 across guests.
+  // ceil/floor so the numbers always add up to participantCount.
   const [quantities, setQuantities] = useState({
     vorspeise: participantCount,
     hauptspeise1: hasTwoMains ? Math.ceil(participantCount / 2) : participantCount,

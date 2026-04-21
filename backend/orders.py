@@ -1,6 +1,15 @@
+"""
+Order lifecycle (create, list, feedback) and checkout storytelling.
+
+The feedback endpoint has a neat side-effect: when a user comments on a dish,
+that comment gets appended to the dish's feedback_context and triggers a
+background re-embedding. This means user opinions gradually influence future
+RAG results — a lightweight feedback loop without retraining.
+"""
 import asyncio
 import os
 import json
+import logging
 import threading
 import re
 from google import genai
@@ -16,6 +25,8 @@ from db_models import DBOrder, DBFeedback, DBDish, DBUser
 from auth import get_current_user, get_optional_user
 from embeddings import re_embed_dish
 from memory import get_memory, get_research_sidecar
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -49,7 +60,7 @@ class StoryRequest(BaseModel):
 
 @router.post("/checkout/story")
 async def get_checkout_story(req: StoryRequest):
-    """Generiert ein persönliches Storytelling für den Checkout basierend auf dem Memory."""
+    """Generate a personalized checkout story based on the lead's memory profile."""
     memory = get_memory(req.lead_id)
     chosen_dishes = ", ".join(req.dishes) if req.dishes else "unserer Auswahl"
     
@@ -93,6 +104,8 @@ async def get_checkout_story(req: StoryRequest):
             color_match = re.search(r"\*\*Branding:\*\*\s*(.*?)(?:\s*\||\n)", memory, re.IGNORECASE)
             company_color = color_match.group(1).strip().lower() if color_match else ""
 
+        # Map company brand color to a matching heart emoji — small B2B polish
+        # that makes checkout pages feel branded without any CSS work
         color_to_heart = {
             "rot": "❤️", "red": "❤️",
             "blau": "💙", "blue": "💙",
@@ -147,16 +160,16 @@ REGELN:
                     story = response.text.strip().strip('"')
                     story_done = True
                     if story_model != story_models[0]:
-                        print(f"[Story] Succeeded with fallback model {story_model}")
+                        logger.info("Story succeeded with fallback model %s", story_model)
                     break
                 except Exception as e:
                     if "503" in str(e) and attempt < MAX_RETRIES:
                         await asyncio.sleep(3 * (attempt + 1))
                     elif "503" in str(e) and story_model != story_models[-1]:
-                        print(f"[Story] {story_model} exhausted, falling back to {story_models[-1]}")
+                        logger.info("%s exhausted, falling back to %s", story_model, story_models[-1])
                         break
                     else:
-                        print(f"[Story Error] {e}")
+                        logger.error("Story generation failed: %s", e)
                         story_done = True
                         break
 
@@ -186,11 +199,11 @@ async def submit_order(order: OrderSubmit, db: Session = Depends(get_db), curren
             try:
                 db.commit()
                 db.refresh(user)
-            except:
+            except Exception:
                 db.rollback()
                 user = db.query(DBUser).filter(DBUser.email == email).first()
-            
-            print(f"[Orders] User {email} handled during order.")
+
+            logger.info("User %s handled during order submission", email)
         
         if user:
             user_id = user.id

@@ -1,3 +1,4 @@
+// Admin dashboard overview — daily orders, leads, and status management.
 import { useState } from 'react'
 
 export default function OverviewSubTab({

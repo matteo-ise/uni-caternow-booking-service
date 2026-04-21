@@ -1,33 +1,40 @@
+"""
+Database engine setup — Postgres + pgvector in production, SQLite fallback for local dev.
+
+The SQLite fallback lets you run the app without a DB server, but vector search
+(pgvector) won't work. In production (Render/Railway), DATABASE_URL must be set.
+"""
 import os
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
-# Lade .env aus dem Hauptverzeichnis
+logger = logging.getLogger(__name__)
+
+# Load .env from project root
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
-    # Falls wir lokal sind und keine DB haben, nutzen wir SQLite für Basistests, 
-    # aber warnen, dass pgvector dann nicht funktioniert.
-    # In Produktion (Render) MUSS DATABASE_URL gesetzt sein.
-    print("[WARNING] DATABASE_URL nicht gefunden. Nutze SQLite Fallback (pgvector wird fehlschlagen!)")
+    logger.warning("DATABASE_URL not found — using SQLite fallback (pgvector will not work!)")
     DATABASE_URL = "sqlite:///./local_fallback.db"
 
-# Render/Neon/Heroku liefern oft 'postgres://' - SQLAlchemy benötigt 'postgresql://'
+# Render/Neon/Heroku often provide 'postgres://' but SQLAlchemy needs 'postgresql://'
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Engine Konfiguration
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
+    # pool_pre_ping: test connections before use — critical for Neon serverless
+    # which drops idle connections after ~5 min of inactivity (cold-start issue)
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,          # Test connection before use — fixes Neon cold-start
-        pool_recycle=300,            # Recycle connections after 5 min to prevent stale connections
-        connect_args={"connect_timeout": 10},  # 10s connect timeout instead of indefinite wait
+        pool_pre_ping=True,
+        pool_recycle=300,
+        connect_args={"connect_timeout": 10},
     )
 
 
@@ -43,20 +50,21 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initialisiert die DB, aktiviert die pgvector-Extension und legt die Tabellen an."""
-    # pgvector Extension muss in der Datenbank existieren, bevor Tabellen mit Vector-Typ angelegt werden.
+    """Initialize DB, enable pgvector extension, and create tables."""
+    # pgvector extension must exist before any table with a Vector column is created
     if not DATABASE_URL.startswith("sqlite"):
         with engine.begin() as conn:
             try:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             except Exception as e:
-                print(f"[Database] Warnung beim Aktivieren von pgvector: {e}")
-    
-    # Import hier, um Zirkulär-Imports zu vermeiden
+                logger.warning("Could not enable pgvector: %s", e)
+
+    # Import here to avoid circular imports (db_models imports Base from this module)
     import db_models
     Base.metadata.create_all(bind=engine)
 
-    # Schema migrations for existing tables (create_all doesn't add columns to existing tables)
+    # Poor man's migrations: create_all won't add columns to existing tables,
+    # so we ALTER TABLE manually. Fine for an MVP — migrate to Alembic later.
     if not DATABASE_URL.startswith("sqlite"):
         migrations = [
             ("memories", "sidecar_data", "ALTER TABLE memories ADD COLUMN IF NOT EXISTS sidecar_data TEXT"),
@@ -74,6 +82,6 @@ def init_db():
                 with engine.begin() as conn:
                     conn.execute(text(sql))
             except Exception as e:
-                print(f"[Database] Migration note for {table}.{column}: {e}")
+                logger.debug("Migration note for %s.%s: %s", table, column, e)
 
 

@@ -1,3 +1,11 @@
+"""
+Admin API — CRUD for leads/orders/users, vector search benchmark, and AI profile extraction.
+
+Most endpoints are straightforward CRUD. The interesting bits:
+- extract_user_profile: uses Gemini to synthesize insights across multiple lead dossiers
+- vector-benchmark: exposes raw cosine similarity scores for debugging RAG quality
+- seed-users: demo data for pitch presentations (idempotent, skips existing)
+"""
 import os
 import json
 from datetime import datetime, timezone, timedelta
@@ -15,7 +23,6 @@ from memory import get_research_sidecar
 
 router = APIRouter()
 
-# Ein einfaches Admin-Passwort aus der .env oder Fallback
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "caternow-admin")
 MEMORY_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data", "memory"))
 DATA_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data"))
@@ -165,7 +172,9 @@ async def get_users(db: Session = Depends(get_db), authenticated: bool = Depends
     """Listet alle registrierten User (Firebase-Accounts) auf."""
     users = db.query(DBUser).order_by(DBUser.created_at.desc()).all()
     return [
-        {"id": u.id, "firebase_uid": u.firebase_uid, "email": u.email, "name": u.name, "created_at": u.created_at}
+        {"id": u.id, "firebase_uid": u.firebase_uid, "email": u.email, "name": u.name, "created_at": u.created_at,
+         "first_login_at": u.first_login_at, "last_login_at": u.last_login_at, "login_count": u.login_count or 0,
+         "total_orders": u.total_orders or 0, "total_spent": u.total_spent or 0.0}
         for u in users
     ]
 

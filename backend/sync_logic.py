@@ -2,7 +2,7 @@ import hashlib
 import os
 
 def get_file_hash(filepath):
-    """Berechnet einen MD5-Hash der Datei, um Änderungen zu erkennen."""
+    """Compute an MD5 hash of the file to detect changes between deployments."""
     if not os.path.exists(filepath):
         return None
     hasher = hashlib.md5()

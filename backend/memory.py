@@ -1,11 +1,25 @@
+"""
+Persistent lead memory as markdown dossiers with structured sidecar data.
+
+Each lead gets a markdown "intelligence report" that Gemini rewrites entirely
+on every chat turn — updating psychographic signals, behavioral findings, and
+the interaction log. Sidecar JSON stores structured research data (address,
+logo, colors) separately for programmatic access.
+
+Template uses emoji headers so it's human-readable in the admin panel while
+still parseable by both regex (in research.py's patch function) and Gemini.
+"""
 import os
 import json
+import logging
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from database import SessionLocal
 from db_models import DBMemory
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -105,8 +119,9 @@ def get_research_sidecar(lead_id: str) -> dict | None:
 
 def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_facts: dict):
     """
-    Diese Funktion liest die aktuelle Memory aus der Datenbank, füttert den neuen Chat-Austausch
-    an Gemini und lässt das Memory-Dokument live umschreiben/updaten.
+    Reads the current memory dossier from DB, feeds the latest chat exchange to
+    Gemini, and lets it rewrite the entire document with updated findings.
+    Runs in a background thread (fire-and-forget from chat.py).
     """
     db = SessionLocal()
     try:
@@ -117,28 +132,29 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
         else:
             current_memory = mem.content
 
+        # German prompt: intentional for DACH market output quality
         prompt = f"""
-        Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst. 
+        Du bist die "Lead Intelligence Unit" von CaterNow - ein psychologisch geschulter Sales-Analyst.
         Deine Aufgabe ist es, aus dem Chat-Verlauf eines Kunden (Lead) extrem präzise Erkenntnisse (Findings) zu extrahieren.
-        
+
         Aktuelles Dossier:
         ```markdown
         {current_memory}
         ```
-        
+
         Neueste Interaktion:
         KUNDE: "{user_message}"
         BOT: "{bot_message}"
-        
+
         DEINE MISSION:
         1. **Psychogramm schärfen:** Wie ist die Stimmung? (Professionell, sarkastisch, gestresst?). Wie hoch ist die Kaufabsicht (Cold/Warm/Hot)? Wie gut passen wir zur Firmenkultur (Alignment)?
         2. **Findings extrahieren:** Was wissen wir jetzt NEUES über den Kunden? (z.B. "Legt Wert auf Regionalität", "Reagiert empfindlich auf Preise", "Will die Chefin beeindrucken").
         3. **Log kürzen:** Füge EINEN extrem kurzen Satz hinzu, was in diesem Schritt passiert ist (z.B. "Vorspeisen-Match bestätigt"). KEINE Wiederholung von Inhalten.
         4. **Hard Facts:** Nur aktualisieren, wenn der Kunde im Chat eine Korrektur vorgenommen hat (z.B. "Doch nur 20 Personen").
-        
+
         Gib NUR das aktualisierte Markdown-Dokument zurück. Sei präzise, analytisch und fast schon gruselig gut in deiner Beobachtung.
         """
-        
+
         try:
             memory_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
             response = None
@@ -152,27 +168,27 @@ def update_memory_async(lead_id: str, user_message: str, bot_message: str, hard_
                         ),
                     )
                     if mem_model != memory_models[0]:
-                        print(f"[Memory] Succeeded with fallback model {mem_model}")
+                        logger.info(f"[Memory] Succeeded with fallback model {mem_model}")
                     break
                 except Exception as e:
                     if "503" in str(e) and mem_model != memory_models[-1]:
-                        print(f"[Memory] 503 on {mem_model}, trying fallback")
+                        logger.warning(f"[Memory] 503 on {mem_model}, trying fallback")
                         continue
                     raise
             new_memory = response.text.strip()
-            
-            # Remove markdown ticks if present
+
+            # Strip markdown fences if Gemini wrapped the output
             if new_memory.startswith("```markdown"):
                 new_memory = new_memory[11:]
             elif new_memory.startswith("```"):
                 new_memory = new_memory[3:]
-                
+
             if new_memory.endswith("```"):
                 new_memory = new_memory[:-3]
-                
+
             mem.content = new_memory.strip()
             db.commit()
         except Exception as e:
-            print(f"[Memory] Fehler beim Updaten des Memory für {lead_id}: {e}")
+            logger.error(f"[Memory] Failed to update memory for {lead_id}: {e}")
     finally:
         db.close()

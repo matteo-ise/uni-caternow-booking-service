@@ -1,4 +1,4 @@
-# Historische Daten über beliebte Catering-Kombinationen (Social Proof)
+# Historical data on popular catering combinations (social proof for the AI chat)
 
 BESTSELLERS = {
     "combinations": [

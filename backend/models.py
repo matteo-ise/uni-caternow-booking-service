@@ -1,6 +1,5 @@
 """
-Pydantic Models for CaterNow Backend API.
-Updated to include similarity scores for vector search transparency.
+Pydantic request/response models for the CaterNow API.
 """
 from pydantic import BaseModel
 from typing import Literal, List, Optional
@@ -21,10 +20,13 @@ class WizardData(BaseModel):
 
 class Dish(BaseModel):
     name: str
+    # German field names (kategorie, preis) match the source Excel columns
+    # to keep the CSV-to-DB-to-API pipeline straightforward
     kategorie: Literal["vorspeise", "hauptgericht", "dessert"]
     preis: Optional[float] = None
     image_url: Optional[str] = None
-    similarity_score: Optional[float] = None # Der mathematische Match-Wert (0 bis 1)
+    # Raw cosine similarity (0..1) — exposed in the UI as "AI Match %"
+    similarity_score: Optional[float] = None
 
 
 class MenuSuggestion(BaseModel):

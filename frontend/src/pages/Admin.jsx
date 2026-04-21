@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { API_URL } from '../config'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import UserEditorSubTab from '../components/admin/UserEditorSubTab'
+import AnalyticsDashboard from '../components/admin/AnalyticsDashboard'
 import OverviewSubTab from '../components/admin/OverviewSubTab'
 import LeadDetailModal from '../components/admin/LeadDetailModal'
 import OrderDetailModal from '../components/admin/OrderDetailModal'
@@ -203,19 +203,6 @@ export default function Admin() {
     )
   }
 
-  // Metrics calculation
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const totalOrders = orders.length;
-
-  // Chart Data preparation (group orders by date)
-  const ordersByDate = orders.reduce((acc, order) => {
-    const date = new Date(order.created_at).toLocaleDateString()
-    if (!acc[date]) acc[date] = 0
-    acc[date] += (order.total_price || 0)
-    return acc
-  }, {})
-  const chartData = Object.keys(ordersByDate).map(date => ({ date, umsatz: ordersByDate[date] })).reverse()
-
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#f8fafc', fontFamily: 'Montserrat, sans-serif' }}>
       
@@ -270,78 +257,14 @@ export default function Admin() {
         
         {/* ANALYTICS */}
         {activeTab === 'analytics' && (
-          <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '24px' }}>Dashboard</h1>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Gesamtumsatz</div>
-                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{totalRevenue.toFixed(2)} €</div>
-              </div>
-              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Bestellungen</div>
-                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{totalOrders}</div>
-              </div>
-              <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>Aktive Leads (AI Memory)</div>
-                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginTop: '8px' }}>{leads.length}</div>
-              </div>
-            </div>
-
-            {/* System Status */}
-            <div style={{ marginTop: '32px', background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '16px', color: '#0f172a' }}>🛠️ System Health & API Status</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Gemini API Key</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Live & Authenticated</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Firebase Auth</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Connected</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Research Webhook</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Last Run: Success</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* DANGER ZONE REMOVED FOR SAFETY */}            </div>
-
-            {/* Recharts Umsatz-Kurve */}
-            <div style={{ marginTop: '32px', background: '#fff', padding: '40px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '24px', color: '#0f172a' }}>Umsatzentwicklung nach Tagen</h2>
-              <div style={{ height: '300px', width: '100%' }}>
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dx={-10} tickFormatter={(value) => `${value}€`} />
-                      <Tooltip 
-                        cursor={{fill: '#f1f5f9'}} 
-                        contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
-                        formatter={(value) => [`${value} €`, 'Umsatz']}
-                      />
-                      <Bar dataKey="umsatz" fill="#037A8B" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
-                    Noch keine Bestelldaten für den Graphen vorhanden.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <AnalyticsDashboard
+            orders={orders}
+            leads={leads}
+            feedbacks={feedbacks}
+            dishes={dishes}
+            users={users}
+            systemHealth={{ geminiOk: true, firebaseOk: true, researchOk: true }}
+          />
         )}
 
         {/* ORDERS */}
@@ -355,6 +278,7 @@ export default function Admin() {
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>ID</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Lead ID</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Status</th>
+                    <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Personen</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Umsatz</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}>Datum</th>
                     <th style={{ padding: '16px', fontWeight: 600, color: '#64748b' }}></th>
@@ -388,12 +312,13 @@ export default function Admin() {
                           <option value="storniert">Storniert</option>
                         </select>
                       </td>
+                      <td style={{ padding: '16px', color: '#64748b' }}>{(() => { const w = o.order_data?.wizard || o.order_data?.wizard_data || {}; return w.persons || w.guestCount || '—'; })()}</td>
                       <td style={{ padding: '16px', fontWeight: 700 }}>{o.total_price ? `${o.total_price.toFixed(2)} €` : '—'}</td>
                       <td style={{ padding: '16px', color: '#64748b' }}>{new Date(o.created_at).toLocaleDateString('de-DE')}</td>
                       <td style={{ padding: '16px', color: '#037A8B', fontSize: '0.85rem', fontWeight: 600 }}>Details →</td>
                     </tr>
                   ))}
-                  {orders.length === 0 && <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center' }}>Keine Bestellungen vorhanden.</td></tr>}
+                  {orders.length === 0 && <tr><td colSpan="7" style={{ padding: '24px', textAlign: 'center' }}>Keine Bestellungen vorhanden.</td></tr>}
                 </tbody>
               </table>
             </div>

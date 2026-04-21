@@ -1,3 +1,4 @@
+// Admin sub-tab for browsing and editing user accounts.
 import { useState, useEffect } from 'react'
 import { API_URL } from '../../config'
 import UserProfileCard from './UserProfileCard'
