@@ -84,12 +84,35 @@ def check_and_inc_usage(feature: str, limit: int = 500) -> bool:
     finally:
         db.close()
 
+# Premium demo customers that don't exist online — used for pitch presentations
+# and testing. Returns instantly without burning a google_search quota call.
+_DEMO_CUSTOMERS: dict[str, ResearchResult] = {
+    "söllner und söhne": ResearchResult(
+        is_business=True,
+        company_name="Söllner und Söhne GmbH",
+        core_values=["Tradition", "Handwerkskunst", "Familienunternehmen", "Qualität"],
+        fancy_score=72,
+        summary="Söllner und Söhne ist ein traditionsreiches Familienunternehmen aus Mannheim mit Fokus auf Qualität und Handwerkskunst. Ansprechpartnerin: Beate.",
+        company_colors=["Dunkelblau", "Gold"],
+        slogan="Qualität seit Generationen",
+        hq_address="Kossistraße 1, 68159 Mannheim",
+        logo_url="https://logo.clearbit.com/soellner-soehne.de",
+    ),
+}
+
 def run_company_research(company_name_or_domain: str) -> ResearchResult:
     """Run company research with Google Search grounding (limit: 500/day)."""
     if not company_name_or_domain:
         return ResearchResult(is_business=False)
 
     search_target = company_name_or_domain.strip()
+
+    # Check demo customers first (case-insensitive)
+    demo = _DEMO_CUSTOMERS.get(search_target.lower())
+    if demo:
+        logger.info(f"[Research] Using demo customer data for '{search_target}'")
+        _research_cache[search_target] = demo
+        return demo
 
     if search_target in _research_cache:
         return _research_cache[search_target]

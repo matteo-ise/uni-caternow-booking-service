@@ -158,7 +158,7 @@ export default function ChatModal({ isOpen, onClose }) {
           const isPlaceholder = (dish) => {
             if (!dish || !dish.name) return true
             const n = dish.name.toLowerCase()
-            return n.includes('exakter_name') || n.includes('platzhalter') || n.includes('name des')
+            return n.includes('exakter_name') || n.includes('platzhalter') || n.includes('name des') || n.includes('exakter_gerichtname') || n.includes('gerichtname_aus')
           }
           const newOptions = {
             vorspeise: data.vorspeise?.alternativen || (data.vorspeise ? [data.vorspeise] : []),
@@ -218,10 +218,6 @@ export default function ChatModal({ isOpen, onClose }) {
     } finally { setIsWaiting(false) }
   }, [messages, isWaiting, wizardData, leadId, selectedServices, quickReplies])
   function handleMenuSelect(course, dish) {
-    if (course === 'TRIGGER_HAUPTSPEISE') {
-      handleSend("Die Vorspeise steht! Welche Hauptspeise würdest du dazu empfehlen?")
-      return
-    }
     if (course === 'TRIGGER_UPSELL') {
       handleSend("Hauptspeise 1 gefällt mir sehr gut! Was würdest du als zweite Hauptspeise dazu empfehlen, damit für jeden Gast etwas dabei ist?")
       return
