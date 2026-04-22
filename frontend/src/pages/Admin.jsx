@@ -345,10 +345,28 @@ export default function Admin() {
                   <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: '4px' }}>{d.name}</div>
                   <div style={{ color: '#64748b', marginBottom: '16px' }}>{d.preis ? `${d.preis.toFixed(2)} €` : 'Preis auf Anfrage'}</div>
                   
-                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#475569' }}>
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#475569', marginBottom: '12px' }}>
                     <strong>AI Feedback Context:</strong><br/>
                     {d.feedback_context ? d.feedback_context : <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>Noch kein Feedback vorhanden</span>}
                   </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`"${d.name}" wirklich löschen?`)) {
+                        if (window.confirm(`Sicher? Dieses Gericht wird unwiderruflich entfernt.`)) {
+                          setDishes(prev => prev.filter(dish => dish.id !== d.id))
+                        }
+                      }
+                    }}
+                    style={{
+                      width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #fca5a5',
+                      background: '#fff', color: '#dc2626', fontSize: '0.8rem', fontWeight: 600,
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}
+                  >
+                    Gericht entfernen
+                  </button>
                 </div>
               ))}
             </div>
@@ -368,7 +386,7 @@ export default function Admin() {
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: '8px', color: '#0f172a' }}>
-                      {f.is_general ? 'Allgemeines Feedback' : `Feedback zu Gericht: ${f.dish_name}`}
+                      {f.is_general ? 'Allgemeines Feedback' : `Feedback zu Gericht: ${f.dish_name || 'Unbekanntes Gericht'}`}
                     </div>
                     <p style={{ color: '#475569', lineHeight: '1.6', margin: 0 }}>"{f.comment}"</p>
                   </div>

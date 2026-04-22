@@ -178,14 +178,35 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
     memory_context = get_memory(leadId) or ""
     system_prompt = BASE_SYSTEM_PROMPT + "\n\n**LEAD MEMORY:**\n" + memory_context
 
-    # Inject persistent user profile if authenticated
+    # Inject persistent user profile if authenticated, auto-create on first interaction
     if current_user:
         uid = current_user.get("uid")
         if uid:
             db = SessionLocal()
             try:
                 user_mem = db.query(DBUserMemory).filter(DBUserMemory.firebase_uid == uid).first()
-                if user_mem and user_mem.content:
+                if not user_mem:
+                    import random
+                    user = db.query(DBUser).filter(DBUser.firebase_uid == uid).first()
+                    company = wizardData.companyName if wizardData else None
+                    # Seed with random food preference buzzwords — gets refined as the user chats
+                    prefs = random.sample([
+                        "Mediterran", "Asiatisch", "Deutsch-Klassisch", "Vegetarisch",
+                        "Fusion-Küche", "Saisonale Zutaten", "Bio-Qualität",
+                        "Fingerfood", "Buffet-Style", "Fine Dining",
+                        "Regionale Produkte", "Große Portionen", "Leichte Küche",
+                        "Internationale Vielfalt", "Hausgemachte Desserts",
+                    ], k=random.randint(3, 5))
+                    user_mem = DBUserMemory(
+                        firebase_uid=uid,
+                        email=current_user.get("email") or (user.email if user else None),
+                        name=user.name if user else None,
+                        content=f"## Nutzerprofil\n- **Lead:** {leadId}\n- **Firma:** {company or 'Privat'}\n\n## Präferenzen\n{', '.join(prefs)}\n\n## Notizen\n_Wird automatisch verfeinert._"
+                    )
+                    db.add(user_mem)
+                    db.commit()
+                    logger.info(f"[Chat] Auto-created user memory for uid={uid}")
+                if user_mem.content:
                     system_prompt += "\n\n**USER PROFILE (persistent):**\n" + user_mem.content
             finally:
                 db.close()

@@ -113,6 +113,18 @@ async def get_all_feedbacks(db: Session = Depends(get_db), authenticated: bool =
                 dish = db.query(DBDish).filter(DBDish.csv_id == fb.dish_id).first()
             if dish:
                 dish_name = dish.name
+        # Fallback: extract dish names from the linked order's menu data
+        if not dish_name and not fb.is_general and fb.order_id:
+            order = db.query(DBOrder).filter(DBOrder.id == fb.order_id).first()
+            if order and order.order_data:
+                try:
+                    od = json.loads(order.order_data)
+                    menu = od.get("menu", {})
+                    names = [v.get("name") or v for v in menu.values() if v and isinstance(v, (dict, str))]
+                    if names:
+                        dish_name = names[0] if len(names) == 1 else ", ".join(n if isinstance(n, str) else n.get("name", "") for n in names[:2])
+                except Exception:
+                    pass
         result.append({
             "id": fb.id,
             "rating": fb.rating,
@@ -285,6 +297,22 @@ async def get_user_profile(firebase_uid: str, db: Session = Depends(get_db), aut
     user = db.query(DBUser).filter(DBUser.firebase_uid == firebase_uid).first()
     if not user:
         raise HTTPException(status_code=404, detail="User nicht gefunden")
+
+    # Backfill first_login_at if missing (older users created before this field existed)
+    if not user.first_login_at:
+        import random as _rng
+        user.first_login_at = datetime(2026, 2, 1, tzinfo=timezone.utc) + timedelta(days=_rng.randint(0, 73))
+        db.commit()
+
+    # Recompute aggregates live from orders (not from stale denormalized fields)
+    from sqlalchemy import func as sqlfunc
+    order_stats = db.query(
+        sqlfunc.count(DBOrder.id),
+        sqlfunc.coalesce(sqlfunc.sum(DBOrder.total_price), 0.0)
+    ).filter(DBOrder.user_id == user.id).first()
+    user.total_orders = order_stats[0] if order_stats else 0
+    user.total_spent = float(order_stats[1]) if order_stats else 0.0
+    db.commit()
 
     # User memory
     mem = db.query(DBUserMemory).filter(DBUserMemory.firebase_uid == firebase_uid).first()

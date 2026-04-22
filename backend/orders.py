@@ -251,6 +251,9 @@ async def submit_feedback(feedback: FeedbackSubmit, db: Session = Depends(get_db
         dish = db.query(DBDish).filter(DBDish.csv_id == feedback.dish_id).first()
         if dish:
             real_dish_id = dish.id
+            logger.info(f"[Feedback] Linked to dish '{dish.name}' (csv_id={feedback.dish_id}, db_id={dish.id})")
+        else:
+            logger.warning(f"[Feedback] dish_id={feedback.dish_id} not found by csv_id")
 
     db_fb = DBFeedback(
         user_id=user.id,

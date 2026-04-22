@@ -56,8 +56,9 @@ export default function Profile() {
     const isGeneral = target === 'general'
     let dishId = null
     if (!isGeneral) {
-      const dishObj = Object.values(menu).find(d => d && (d.id || d.name || d) === target)
-      dishId = dishObj?.id || dishObj?.csv_id || null
+      // target is a string from <select>, dish.id (csv_id) is a number — coerce for comparison
+      const dishObj = Object.values(menu).find(d => d && String(d.id || d.name || d) === target)
+      dishId = dishObj?.id ?? dishObj?.csv_id ?? null
     }
 
     setFeedbackState(prev => ({ ...prev, [orderId]: { ...prev[orderId], submitting: true, error: null } }))
@@ -173,7 +174,7 @@ export default function Profile() {
                               >
                                 <option value="general">🏠 Allgemein (Caterer)</option>
                                 {Object.entries(menu).map(([key, dish]) => dish && (
-                                  <option key={key} value={dish.id || dish.name || dish}>🍽️ {dish.name || dish}</option>
+                                  <option key={key} value={String(dish.id || dish.name || dish)}>🍽️ {dish.name || dish}</option>
                                 ))}
                               </select>
                             </div>

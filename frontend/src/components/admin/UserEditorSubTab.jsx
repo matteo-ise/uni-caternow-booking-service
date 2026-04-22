@@ -145,34 +145,6 @@ export default function UserEditorSubTab({ users, getAdminToken, onUsersRefresh 
               <UserProfileCard profile={profile} />
             </div>
 
-            {/* AI Extracted Profile */}
-            <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>KI-Extrahiertes Profil</h3>
-                <button
-                  onClick={extractProfile}
-                  disabled={extracting}
-                  style={{
-                    background: '#7c3aed', color: '#fff', padding: '8px 16px', borderRadius: '8px',
-                    border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
-                  }}
-                >
-                  {extracting ? 'Extrahiere...' : 'Extrahieren'}
-                </button>
-              </div>
-              {profile.leads?.length > 0 ? (
-                <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                  <div style={{ marginBottom: '8px', color: '#94a3b8' }}>
-                    Verknüpfte Leads: {profile.leads.map(l => l.company_name || l.lead_id).join(', ')}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.82rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                  Keine verknüpften Lead-Dossiers gefunden. Extraktion benötigt mindestens ein Dossier.
-                </div>
-              )}
-            </div>
-
             {/* Manual Notes / Textarea */}
             <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', display: 'flex', flexDirection: 'column' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', fontWeight: 700 }}>Profil & Notizen (Markdown)</h3>

@@ -1,23 +1,28 @@
-// Reusable KPI card for the analytics dashboard.
-export default function KpiCard({ label, value, suffix, icon }) {
+// Reusable KPI card — auto-shrinks text to prevent overflow.
+export default function KpiCard({ label, value, suffix }) {
+  const valStr = String(value)
+  // Shrink font when value is long to prevent card overflow
+  const fontSize = valStr.length > 10 ? '1.1rem' : valStr.length > 7 ? '1.3rem' : '1.6rem'
+
   return (
     <div style={{
       background: '#fff',
       borderRadius: '16px',
       border: '1px solid #e2e8f0',
       padding: '20px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
+      minWidth: 0,
+      overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {icon && <span style={{ fontSize: '1.1rem' }}>{icon}</span>}
-        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>{label}</span>
+      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>
+        {label}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{value}</span>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: '4px',
+        overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+      }}>
+        <span style={{ fontSize, fontWeight: 800, color: '#0f172a' }}>{value}</span>
         {suffix && (
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>{suffix}</span>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', flexShrink: 0 }}>{suffix}</span>
         )}
       </div>
     </div>

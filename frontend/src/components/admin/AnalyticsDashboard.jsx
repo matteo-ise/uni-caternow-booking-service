@@ -19,6 +19,13 @@ function formatCurrency(n) {
   return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
 }
 
+// Compact number formatting for Y-axis labels (1200 → "1,2k", 1500000 → "1,5M")
+function formatCompact(n) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}M`
+  if (n >= 1_000) return `${(n / 1_000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}k`
+  return n.toLocaleString('de-DE')
+}
+
 function truncate(str, max) {
   if (!str) return ''
   return str.length > max ? str.slice(0, max) + '...' : str
@@ -33,7 +40,7 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
   } = useAnalyticsData({ orders, leads, feedbacks, dishes, users }, timeRange)
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto' }}>
+    <div>
       {/* Header */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -62,18 +69,18 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — 3 columns on narrow, 5 on wide */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        gap: '20px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '16px',
         marginBottom: '24px',
       }}>
-        <KpiCard label="Gesamtumsatz" value={formatCurrency(kpis.totalRevenue)} suffix="EUR" />
+        <KpiCard label="Gesamtumsatz" value={formatCurrency(kpis.totalRevenue)} suffix="€" />
         <KpiCard label="Bestellungen" value={kpis.totalOrders} />
         <KpiCard label="Aktive Leads" value={kpis.activeLeads} />
-        <KpiCard label="Ø Bestellwert" value={formatCurrency(kpis.avgOrderValue)} suffix="EUR" />
-        <KpiCard label="Conversion Rate" value={kpis.conversionRate.toFixed(1)} suffix="%" />
+        <KpiCard label="Ø Bestellwert" value={formatCurrency(kpis.avgOrderValue)} suffix="€" />
+        <KpiCard label="Conversion" value={kpis.conversionRate.toFixed(1)} suffix="%" />
       </div>
 
       {/* Revenue Chart */}
@@ -84,45 +91,33 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
               Noch keine Umsatzdaten vorhanden.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={revenueOverTime}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={v => `${v} €`} />
-                <Tooltip formatter={v => [`${formatCurrency(v)} €`, 'Umsatz']} />
-                <Area
-                  type="monotone"
-                  dataKey="umsatz"
-                  stroke="#037A8B"
-                  strokeWidth={2}
-                  fill="#037A8B"
-                  fillOpacity={0.1}
-                />
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={revenueOverTime} margin={{ left: 10, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} width={60} tickFormatter={v => `${formatCompact(v)} €`} />
+                <Tooltip formatter={v => [`${formatCurrency(v)} €`, 'Umsatz']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                <Area type="monotone" dataKey="umsatz" stroke="#037A8B" strokeWidth={2} fill="#037A8B" fillOpacity={0.1} />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
       </div>
 
-      {/* Order Status + Top Dishes */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+      {/* Order Status + Top Dishes — stack on narrow screens */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px', marginBottom: '24px' }}>
         <ChartCard title="Bestellstatus-Verteilung">
           {orderStatusPipeline.every(s => s.count === 0) ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '0.9rem' }}>
               Keine Bestellungen vorhanden.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={orderStatusPipeline} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <YAxis
-                  dataKey="status"
-                  type="category"
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  width={120}
-                />
-                <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <Tooltip />
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={orderStatusPipeline} layout="vertical" margin={{ left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                <YAxis dataKey="status" type="category" tick={{ fontSize: 11, fill: '#475569' }} width={110} tickLine={false} axisLine={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                   {orderStatusPipeline.map((entry, i) => (
                     <Cell key={i} fill={entry.fill} />
@@ -139,18 +134,12 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
               Keine Gerichtdaten vorhanden.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={topDishes} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fontSize: 11, fill: '#475569' }}
-                  width={150}
-                  tickFormatter={v => truncate(v, 25)}
-                />
-                <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <Tooltip formatter={(v, _, props) => [v, props.payload.name]} />
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={topDishes} layout="vertical" margin={{ left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#475569' }} width={130} tickFormatter={v => truncate(v, 20)} tickLine={false} axisLine={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <Tooltip formatter={(v, _, props) => [v, props.payload.name]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
                 <Bar dataKey="popularity" fill="#037A8B" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -159,35 +148,22 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
       </div>
 
       {/* Feedback Trend + User Acquisition */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px', marginBottom: '24px' }}>
         <ChartCard title="Bewertungsverlauf">
           {feedbackTrend.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '0.9rem' }}>
               Keine Bewertungen vorhanden.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={feedbackTrend}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis
-                  yAxisId="left"
-                  domain={[0, 5]}
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                  tickFormatter={v => v.toFixed(1)}
-                />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <Tooltip />
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={feedbackTrend} margin={{ left: 10, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="left" domain={[0, 5]} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={v => v.toFixed(1)} tickLine={false} axisLine={false} width={35} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} width={30} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
                 <Bar dataKey="count" yAxisId="right" fill="#e2e8f0" radius={[4, 4, 0, 0]} name="Anzahl" />
-                <Line
-                  type="monotone"
-                  dataKey="avgRating"
-                  yAxisId="left"
-                  stroke="#037A8B"
-                  strokeWidth={2}
-                  dot={{ fill: '#037A8B', r: 3 }}
-                  name="Ø Bewertung"
-                />
+                <Line type="monotone" dataKey="avgRating" yAxisId="left" stroke="#037A8B" strokeWidth={2} dot={{ fill: '#037A8B', r: 3 }} name="Ø Bewertung" />
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -199,25 +175,19 @@ export default function AnalyticsDashboard({ orders, leads, feedbacks, dishes, u
               Keine Nutzerdaten vorhanden.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={userAcquisition}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} />
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={userAcquisition} margin={{ left: 10, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} width={30} />
                 <Tooltip
                   formatter={(value, name) => {
                     if (name === 'cumulative') return [value, 'Gesamt']
                     return [value, 'Neue Nutzer']
                   }}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="cumulative"
-                  stroke="#037A8B"
-                  strokeWidth={2}
-                  fill="#037A8B"
-                  fillOpacity={0.15}
-                />
+                <Area type="monotone" dataKey="cumulative" stroke="#037A8B" strokeWidth={2} fill="#037A8B" fillOpacity={0.15} />
               </AreaChart>
             </ResponsiveContainer>
           )}
