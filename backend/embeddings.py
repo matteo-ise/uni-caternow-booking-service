@@ -81,16 +81,34 @@ def build_rich_description(dish_data):
     if pd.notna(kitchen) and str(kitchen).strip() and str(kitchen).lower() != "nan":
         parts.append(f"Küche: {str(kitchen).strip()}")
 
-    scores = []
-    for s_col in ["fancy_score", "heavy_score", "filling_score", "traditional_score", "spicy_score"]:
+    # Convert numeric scores to natural language — embedding models understand
+    # words, not numbers. "filling: 0.8" has no semantic direction in the vector,
+    # but "Sehr sättigend und reichhaltig" clearly does. Low scores (<0.4) are
+    # omitted entirely because "nicht scharf" paradoxically creates proximity
+    # to "scharf" in the embedding space.
+    score_labels = {
+        "fancy_score":       {0.7: "Sehr gehobenes, elegantes Gericht",       0.4: "Gehobenes Gericht"},
+        "heavy_score":       {0.7: "Sehr deftig und kräftig",                 0.4: "Eher deftig"},
+        "filling_score":     {0.7: "Sehr sättigend und reichhaltig",          0.4: "Gut sättigend"},
+        "traditional_score": {0.7: "Sehr traditionell und klassisch",         0.4: "Traditionell angehaucht"},
+        "spicy_score":       {0.7: "Deutlich scharf gewürzt",                 0.4: "Leicht scharf"},
+    }
+    char_parts = []
+    for s_col, thresholds in score_labels.items():
         val = get_val(s_col)
-        if pd.notna(val):
-            scores.append(f"{s_col.replace('_score', '')}: {val}")
-    if scores:
-        parts.append(f"Scores: {', '.join(scores)}")
+        if val is not None and pd.notna(val):
+            fval = float(val)
+            if fval >= 0.7:
+                char_parts.append(thresholds[0.7])
+            elif fval >= 0.4:
+                char_parts.append(thresholds[0.4])
+    if char_parts:
+        parts.append(f"Charakter: {', '.join(char_parts)}")
 
+    # Feedback is capped to the last 5 entries in orders.py to prevent it from
+    # overwhelming the dish's core identity in the embedding vector.
     if pd.notna(feedback) and str(feedback).strip() and str(feedback).lower() != "nan":
-        parts.append(f"Kundenfeedback/Notizen: {str(feedback).strip()}")
+        parts.append(f"Kundenfeedback: {str(feedback).strip()}")
 
     return ". ".join(parts) + "."
 
@@ -305,8 +323,8 @@ async def re_embed_dish_async(dish_id: int):
             rich_desc = build_rich_description(dish)
             res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_desc)
             dish.embedding = res.embeddings[0].values
-            dish.feedback_context = rich_desc
             db.commit()
+            logger.info(f"Re-embedded dish '{dish.name}' (id={dish_id})")
     except Exception as e:
         db.rollback()
         logger.error(f"Re-embedding error: {e}")
