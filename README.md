@@ -260,8 +260,7 @@ caternow/
 ├── data/
 │   ├── memory/              # Persistent lead dossiers (.md)
 │   └── *.csv                # Dish catalog source data
-├── render.yaml              # One-click Render.com deploy config
-├── GEMINI.md                # Deep-dive technical documentation
+├── render.yaml              # Render.com deploy config
 └── .env.example             # Environment variable template
 ```
 
@@ -474,12 +473,8 @@ Contributions are welcome! Here's how to get started:
 
 Please follow [conventional commits](https://www.conventionalcommits.org/) for commit messages.
 
-> For deep technical details about the AI architecture, see [`GEMINI.md`](GEMINI.md).
-
 ---
 
 <p align="center">
-  Built with Gemini + React + FastAPI<br/>
-  A university project by <a href="https://github.com/matteo-ise">@matteo-ise</a><br/><br/>
-  If you found this useful, consider giving it a ⭐
+  A university project by <a href="https://github.com/matteo-ise">@matteo-ise</a>
 </p>

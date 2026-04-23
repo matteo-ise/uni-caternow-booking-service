@@ -1,5 +1,3 @@
-# Consolidated GitIgnore for CaterNow SaaS
-
 # Dependencies
 node_modules/
 .venv/
@@ -25,6 +23,7 @@ build/
 # IDEs & OS
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 .DS_Store
