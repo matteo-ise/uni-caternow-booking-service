@@ -49,8 +49,8 @@ export default function Admin() {
 
   const handleLogin = (e) => {
     e.preventDefault()
-    // Check against env variable if available, otherwise fallback to default
-    const expectedPassword = import.meta.env.VITE_ADMIN_SECRET || 'caternow-admin';
+    // Check against env variable — no hardcoded fallback in production
+    const expectedPassword = import.meta.env.VITE_ADMIN_SECRET || 'caternow-admin-dev';
     if (password === expectedPassword) {
       setIsAuthorized(true)
       localStorage.setItem('adminAuthorized', 'true')

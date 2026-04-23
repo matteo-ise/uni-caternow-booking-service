@@ -266,34 +266,9 @@ async def submit_feedback(feedback: FeedbackSubmit, db: Session = Depends(get_db
     db.add(db_fb)
     db.commit()
 
-    # Update dish embedding and popularity when feedback targets a specific dish
+    # Trigger re-embedding: popularity + feedback text are computed live
+    # from the feedbacks table inside re_embed_dish — single source of truth
     if not feedback.is_general and real_dish_id:
-        dish = db.query(DBDish).filter(DBDish.id == real_dish_id).first()
-        if dish:
-            # Star ratings flow into popularity as a rolling average:
-            # blend existing popularity (catalog baseline) with user ratings (normalized to 0-1)
-            all_ratings = db.query(DBFeedback.rating).filter(
-                DBFeedback.dish_id == real_dish_id,
-                DBFeedback.rating.isnot(None),
-                DBFeedback.is_general == False,
-            ).all()
-            if all_ratings:
-                avg_stars = sum(r[0] for r in all_ratings) / len(all_ratings)
-                user_score = avg_stars / 5.0  # normalize 1-5 → 0.0-1.0
-                # Blend: 40% catalog baseline, 60% user ratings (users matter more over time)
-                catalog_base = 0.5  # original default from Excel
-                weight = min(len(all_ratings) / 10, 0.6)  # ramp up user influence, cap at 60%
-                dish.popularity = round(catalog_base * (1 - weight) + user_score * weight, 3)
-
-            # Append comment to manual_feedback (the field build_rich_description reads),
-            # capped at last 5 entries so feedback enriches but never drowns the description
-            if feedback.comment:
-                existing = dish.manual_feedback or ""
-                entries = [e.strip() for e in existing.split("|") if e.strip()]
-                entries.append(feedback.comment.strip())
-                dish.manual_feedback = " | ".join(entries[-5:])
-
-            db.commit()
-            threading.Thread(target=re_embed_dish, args=(dish.id,)).start()
+        threading.Thread(target=re_embed_dish, args=(real_dish_id,)).start()
 
     return {"status": "Feedback saved"}

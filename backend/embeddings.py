@@ -316,15 +316,47 @@ def find_similar_dishes(query: str, kategorie: str | None = None, top_k: int = 3
     return results[:top_k]
 
 async def re_embed_dish_async(dish_id: int):
+    """
+    Single source of truth for dish enrichment: queries the feedbacks table
+    to compute popularity and feedback text, then re-embeds the dish vector.
+    """
+    from db_models import DBFeedback
+
     db = SessionLocal()
     try:
         dish = db.query(DBDish).filter(DBDish.id == dish_id).first()
-        if dish:
-            rich_desc = build_rich_description(dish)
-            res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_desc)
-            dish.embedding = res.embeddings[0].values
-            db.commit()
-            logger.info(f"Re-embedded dish '{dish.name}' (id={dish_id})")
+        if not dish:
+            return
+
+        # 1. Popularity: rolling average of star ratings, blended with catalog baseline
+        all_ratings = db.query(DBFeedback.rating).filter(
+            DBFeedback.dish_id == dish_id,
+            DBFeedback.rating.isnot(None),
+            DBFeedback.is_general == False,
+        ).all()
+        if all_ratings:
+            avg_stars = sum(r[0] for r in all_ratings) / len(all_ratings)
+            user_score = avg_stars / 5.0
+            catalog_base = 0.5
+            weight = min(len(all_ratings) / 10, 0.6)
+            dish.popularity = round(catalog_base * (1 - weight) + user_score * weight, 3)
+
+        # 2. Feedback text: last 5 comments as computed cache for build_rich_description
+        recent_comments = db.query(DBFeedback.comment).filter(
+            DBFeedback.dish_id == dish_id,
+            DBFeedback.comment.isnot(None),
+            DBFeedback.is_general == False,
+        ).order_by(DBFeedback.created_at.desc()).limit(5).all()
+        dish.manual_feedback = " | ".join(
+            r[0].strip() for r in reversed(recent_comments) if r[0] and r[0].strip()
+        ) or None
+
+        # 3. Re-embed with enriched description
+        rich_desc = build_rich_description(dish)
+        res = _get_client().models.embed_content(model=EMBEDDING_MODEL, contents=rich_desc)
+        dish.embedding = res.embeddings[0].values
+        db.commit()
+        logger.info(f"Re-embedded dish '{dish.name}' (id={dish_id}, ratings={len(all_ratings)}, feedback_entries={len(recent_comments)})")
     except Exception as e:
         db.rollback()
         logger.error(f"Re-embedding error: {e}")

@@ -127,6 +127,12 @@ export default function ChatModal({ isOpen, onClose }) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
+        // Server sends [RETRY] when a 503 forced a retry — discard partial output
+        if (chunk.includes('[RETRY]')) {
+          fullText = ''
+          isFirstChunk = true
+          continue
+        }
         fullText += chunk
         if (isFirstChunk && chunk.trim()) isFirstChunk = false
 

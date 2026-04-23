@@ -118,7 +118,6 @@ export default function Profile() {
             ))}
             <style>{`
               @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
-              @keyframes spin { to { transform: rotate(360deg); } }
             `}</style>
           </div>
         ) : orders.length === 0 ? (
@@ -239,6 +238,7 @@ export default function Profile() {
           </div>
         )}
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   )
 }

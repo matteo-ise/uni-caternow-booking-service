@@ -296,8 +296,6 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                 t.start()
                 try:
                     while True:
-                        # Poll queue without blocking — 20ms is a good balance between
-                        # responsiveness and not hammering the CPU
                         while q.empty():
                             await asyncio.sleep(0.02)
                         item = q.get_nowait()
@@ -312,13 +310,18 @@ async def chat(req: ChatRequest, current_user: Optional[dict] = Depends(get_opti
                         logger.info(f"[Chat] Succeeded with fallback model {model}")
                     break
                 except Exception as e:
-                    if "503" in str(e) and attempt < MAX_STREAM_RETRIES:
-                        wait = 4 * (attempt + 1)
-                        logger.warning(f"[Chat] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
-                        await asyncio.sleep(wait)
-                    elif "503" in str(e) and model != GEMINI_FALLBACK_MODEL:
-                        logger.warning(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
-                        break
+                    if "503" in str(e) and (attempt < MAX_STREAM_RETRIES or model != GEMINI_FALLBACK_MODEL):
+                        # Reset accumulated text — frontend uses [RETRY] to discard partial output
+                        full_reply = ""
+                        if attempt < MAX_STREAM_RETRIES:
+                            wait = 4 * (attempt + 1)
+                            logger.warning(f"[Chat] 503 on {model} attempt {attempt + 1}, retrying in {wait}s...")
+                            yield "\n[RETRY]\n"
+                            await asyncio.sleep(wait)
+                        else:
+                            logger.warning(f"[Chat] {model} exhausted retries, falling back to {GEMINI_FALLBACK_MODEL}")
+                            yield "\n[RETRY]\n"
+                            break
                     else:
                         logger.error(f"[Chat Critical] {e}")
                         if "429" in str(e):

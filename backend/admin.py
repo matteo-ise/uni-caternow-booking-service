@@ -23,7 +23,11 @@ from memory import get_research_sidecar
 
 router = APIRouter()
 
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "caternow-admin")
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET")
+if not ADMIN_SECRET:
+    import logging
+    logging.getLogger(__name__).warning("ADMIN_SECRET not set — using insecure default (dev only)")
+    ADMIN_SECRET = "caternow-admin-dev"
 MEMORY_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data", "memory"))
 DATA_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data"))
 
@@ -593,10 +597,10 @@ async def seed_users(db: Session = Depends(get_db), authenticated: bool = Depend
     """Seed 7 demo users with realistic profiles. Idempotent — skips existing by email."""
     seed_data = [
         {
-            "firebase_uid": "seed-lidlprinzessin",
-            "email": "lidlprinzessin@gmail.com",
-            "name": "Lidl Prinzessin",
-            "companies": ["Lidl Deutschland"],
+            "firebase_uid": "seed-anna-m",
+            "email": "anna.mueller@example.com",
+            "name": "Anna Müller",
+            "companies": ["Muster Retail GmbH"],
             "login_count": 47,
             "first_login_at": datetime(2026, 1, 15, 9, 30, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 21, 14, 20, tzinfo=timezone.utc),
@@ -627,10 +631,10 @@ Pragmatisch, lösungsorientiert, schnelle Entscheidungen
 Stammkundin mit Fokus auf regionale deutsche Küche für wiederkehrende Team-Events. Legt Wert auf große Portionen und ein gutes Preis-Leistungs-Verhältnis. Entscheidet schnell und bevorzugt bewährte Menüs.""",
         },
         {
-            "firebase_uid": "seed-benedict",
-            "email": "bene.hoerbelt@t-online.de",
-            "name": "Benedict",
-            "companies": ["SAP SE"],
+            "firebase_uid": "seed-ben-k",
+            "email": "ben.koch@example.com",
+            "name": "Ben Koch",
+            "companies": ["TechVenture AG"],
             "login_count": 23,
             "first_login_at": datetime(2026, 2, 3, 11, 0, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 18, 16, 45, tzinfo=timezone.utc),
@@ -658,13 +662,13 @@ Tech-Events, Hackathons, Product Launches, Team-Dinners
 Detailorientiert, stellt viele Fragen zu Zutaten, technik-affin
 
 ### Zusammenfassung
-SAP-Mitarbeiter der Premium-Events für Tech-Teams organisiert. Legt großen Wert auf vegetarische Alternativen und internationale Vielfalt. Detailorientiert bei der Menüauswahl.""",
+Mitarbeiter der Premium-Events für Tech-Teams organisiert. Legt großen Wert auf vegetarische Alternativen und internationale Vielfalt. Detailorientiert bei der Menüauswahl.""",
         },
         {
-            "firebase_uid": "seed-lucaschmitt",
-            "email": "lucaa1306@gmail.com",
-            "name": "Luca Schmitt",
-            "companies": ["BMW Group"],
+            "firebase_uid": "seed-luca-s",
+            "email": "luca.schmidt@example.com",
+            "name": "Luca Schmidt",
+            "companies": ["AutoPremium AG"],
             "login_count": 12,
             "first_login_at": datetime(2026, 3, 1, 8, 15, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 20, 19, 30, tzinfo=timezone.utc),
@@ -692,13 +696,13 @@ Executive Dinner, Kunden-Events, Board Meetings
 Formell, erwartet Premium-Service, anspruchsvoll
 
 ### Zusammenfassung
-BMW-Executive der ausschließlich High-End Events organisiert. Erwartet Fine-Dining-Niveau mit Wein-Pairing. Budget ist zweitrangig — Qualität und Präsentation stehen im Vordergrund.""",
+Executive der ausschließlich High-End Events organisiert. Erwartet Fine-Dining-Niveau mit Wein-Pairing. Budget ist zweitrangig — Qualität und Präsentation stehen im Vordergrund.""",
         },
         {
-            "firebase_uid": "seed-zoalal",
-            "email": "gizoal256@gmail.com",
-            "name": "Zo Alal",
-            "companies": ["Deutsche Telekom"],
+            "firebase_uid": "seed-sara-y",
+            "email": "sara.yilmaz@example.com",
+            "name": "Sara Yilmaz",
+            "companies": ["NetConnect GmbH"],
             "login_count": 31,
             "first_login_at": datetime(2026, 1, 20, 10, 0, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 19, 11, 15, tzinfo=timezone.utc),
@@ -726,13 +730,13 @@ Großveranstaltungen, Firmenfeste, Diversity Days, Sommerfeste
 Freundlich, kooperativ, legt Wert auf Inklusivität
 
 ### Zusammenfassung
-Organisiert große Telekom-Events mit 100+ Teilnehmern. Halal-Optionen sind ein Muss. Fokus auf diverse, inklusive Menügestaltung für multikulturelle Teams.""",
+Organisiert große Firmen-Events mit 100+ Teilnehmern. Halal-Optionen sind ein Muss. Fokus auf diverse, inklusive Menügestaltung für multikulturelle Teams.""",
         },
         {
-            "firebase_uid": "seed-uppi",
-            "email": "ejuphoff@gmail.com",
-            "name": "Uppi",
-            "companies": ["Siemens AG"],
+            "firebase_uid": "seed-jan-w",
+            "email": "jan.weber@example.com",
+            "name": "Jan Weber",
+            "companies": ["Industrie Partner AG"],
             "login_count": 18,
             "first_login_at": datetime(2026, 2, 10, 13, 0, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 17, 10, 30, tzinfo=timezone.utc),
@@ -760,13 +764,13 @@ Abteilungs-Buffets, Betriebsfeste, Jubiläen
 Unkompliziert, traditionsbewusst, entscheidungsfreudig
 
 ### Zusammenfassung
-Siemens-Mitarbeiter der regelmäßig traditionelle Buffets für die Abteilung bestellt. Bevorzugt bewährte deutsche Klassiker im Buffet-Format. Unkompliziert in der Kommunikation.""",
+Mitarbeiter der regelmäßig traditionelle Buffets für die Abteilung bestellt. Bevorzugt bewährte deutsche Klassiker im Buffet-Format. Unkompliziert in der Kommunikation.""",
         },
         {
-            "firebase_uid": "seed-edonakrasniqi",
-            "email": "donakrdona@gmail.com",
-            "name": "Edona Krasniqi",
-            "companies": ["Bosch GmbH"],
+            "firebase_uid": "seed-elena-f",
+            "email": "elena.fischer@example.com",
+            "name": "Elena Fischer",
+            "companies": ["GreenTech Solutions GmbH"],
             "login_count": 15,
             "first_login_at": datetime(2026, 2, 20, 9, 0, tzinfo=timezone.utc),
             "last_login_at": datetime(2026, 4, 16, 15, 45, tzinfo=timezone.utc),
@@ -794,12 +798,12 @@ Team-Events, Nachhaltigkeits-Workshops, Green-Office Events
 Gesundheitsbewusst, nachhaltigkeitsorientiert, detailliert bei Allergie-Infos
 
 ### Zusammenfassung
-Bosch-Mitarbeiterin mit starkem Fokus auf Nachhaltigkeit und glutenfreie Optionen. Bevorzugt mediterrane Bio-Küche. Fragt immer nach Herkunft der Zutaten und Nachhaltigkeitszertifikaten.""",
+Mitarbeiterin mit starkem Fokus auf Nachhaltigkeit und glutenfreie Optionen. Bevorzugt mediterrane Bio-Küche. Fragt immer nach Herkunft der Zutaten und Nachhaltigkeitszertifikaten.""",
         },
         {
-            "firebase_uid": "seed-matteoi",
-            "email": "matteo.isemann@gmail.com",
-            "name": "Matteo I.",
+            "firebase_uid": "seed-demo-admin",
+            "email": "demo.admin@example.com",
+            "name": "Demo Admin",
             "companies": ["CaterNow"],
             "login_count": 156,
             "first_login_at": datetime(2025, 11, 1, 8, 0, tzinfo=timezone.utc),
